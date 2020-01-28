@@ -1,0 +1,106 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+import sys
+sys.path.append("../../")
+import synapseclient as sc
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+from src.pipeline.utils import query_utils as query
+from src.pipeline.utils import gait_features_utils as gf_utils
+import synapseclient as sc
+from sklearn import metrics
+import time
+import argparse
+import multiprocessing
+warnings.simplefilter("ignore")
+
+
+GAIT_DATA     = "syn21542870"
+ROTATION_DATA = "syn21542869"
+MATCHED_DATA    = "syn21547110"
+syn = sc.login()
+
+
+def iqr(x):
+    return q75(x) - q25(x)
+def q25(x):
+    return x.quantile(0.25)
+def q75(x):
+    return x.quantile(0.75)
+def valrange(x):
+    return x.max() - x.min()
+def kurtosis(x):
+    return x.kurt()
+def skew(x):
+    return x.skew()
+def separate_data_by_axis(data, axis):
+    axis_name = [feat for feat in data.columns if "axis" in feat][0]
+    data = data[data[axis_name] == axis].reset_index(drop = True)
+    data.columns = ["{}.{}".format(axis, cols) if "." in cols else cols for cols in data.columns]
+    return data
+def group_features(data, coord_list, filtered = False):
+
+    gaitfeatures = gf_utils.GaitFeaturize()
+    data = data[[feat for feat in data.columns if ("." in feat) \
+                 or ("healthCode" in feat) or ('recordId' in feat)]]
+    data_dict = {}
+    for coordinate in coord_list:
+        axial_data = separate_data_by_axis(data, coordinate)
+        if filtered:
+            feat = [feat for feat in axial_data.columns if (feat == "%s.walking.steps"%coordinate)\
+                   or (feat == "%s.rotation.steps"%coordinate)][0]
+            axial_data = gaitfeatures.annotate_consecutive_zeros(axial_data, feat).drop(["recordId"], axis = 1)
+            axial_data = axial_data[axial_data["consec_zero_steps_count"] < 15].drop(["consec_zero_steps_count"], axis = 1)
+        axial_data = axial_data.groupby("healthCode").agg([np.max, 
+                                                   np.median, 
+                                                   np.mean,
+                                                   q25, q75, valrange, iqr])
+        data_dict[coordinate] = axial_data
+    data = data_dict[[*data_dict][0]]
+    for coordinate in [*data_dict][1:]:
+        data = pd.merge(data, data_dict[coordinate], on = "healthCode", how = "inner")
+    new_cols = []    
+    for feat, agg in data.columns:
+        new_cols_name = "{}.{}".format(agg, feat)
+        new_cols.append(new_cols_name)
+    data.columns = new_cols
+    return data
+
+def main():
+    gait_data = query.get_file_entity(syn = syn, synid = GAIT_DATA)
+    rotation_data = query.get_file_entity(syn = syn, synid = ROTATION_DATA)
+    match_data = query.get_file_entity(syn = syn, synid = MATCHED_DATA)
+    
+    df = rotation_data[(rotation_data["version"] != "mpower_passive") \
+                            & (rotation_data["version"] != "ems") & (rotation_data["test_type"] == "walking")]
+    df = df[(np.isfinite(df["rotation.energy_freeze_index"]))]
+    df = group_features(df, coord_list = ["y"])
+    matched_rotation_analysis_data = pd.merge(df, match_data, on = "healthCode", how = "inner")
+    query.save_data_to_synapse(syn = syn,
+                                data = matched_rotation_analysis_data,
+                                output_filename = "grouped_rotation_features.csv",
+                                data_parent_id = "syn21537421")
+    
+    df = gait_data[(gait_data["version"] != "mpower_passive")\
+                    & (gait_data["version"] != "ems") & (gait_data["test_type"] == "walking")]
+    df = df[(np.isfinite(df["walking.energy_freeze_index"]))]
+    df = group_features(df, coord_list = ["x","y","z","AA"])
+    matched_walking_analysis_data = pd.merge(df, match_data, on = "healthCode", how = "inner")
+    query.save_data_to_synapse(syn = syn,
+                                data = matched_walking_analysis_data,
+                                output_filename = "grouped_walking_features.csv",
+                                data_parent_id = "syn21537421")
+    
+
+if __name__ ==  '__main__': 
+    start_time = time.time()
+    main()
+    print("--- %s seconds ---" % (time.time() - start_time))
+
+
+    

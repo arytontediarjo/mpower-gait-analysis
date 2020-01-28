@@ -1,0 +1,216 @@
+## import future function ##
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+
+## import standard library ##
+import sys
+import time
+import argparse
+import multiprocessing
+import synapseclient as sc
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+import synapseclient as sc
+from sklearn import metrics
+
+## import local modules ##
+sys.path.append("../../")
+from src.pipeline.utils import query_utils as query
+from src.pipeline.utils import gait_features_utils as gf_utils
+
+## suppress warnings ## 
+warnings.simplefilter("ignore")
+
+
+def read_args():
+    """
+    Function for parsing in argument given by client
+    returns argument parameter
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--update", action = "store_true",
+                        help = "If specified, will update data based on new recordIds, otherwise start fresh")
+    parser.add_argument("--cores", default= multiprocessing.cpu_count(),
+                        help = "Number of Cores, negative number not allowed")
+    parser.add_argument("--partition", default= 250,
+                        help = "Number of sample per partition, no negative number")
+    args = parser.parse_args()
+    return args
+
+
+def clean_gait_mpower_dataset(data, filepath_colname, test_type, version):
+    """
+    Helper function for cleaning queried dataset from Synapse;
+    * Dataset format is based on a list of metadata columns and 
+    a column that consisted of filepaths to data in .synapseCache
+    * Annotate test_types and versions based on function parameter
+
+    Args:
+        data    (type: pd.DataFrame): A dataframe consisting of metadata from synapseTable and filepath to .synapseCace
+                                        containing data from mPower
+        filepath_colname (type: str): Change column name to something that is consistent for analysis
+        test_type        (type: str): Define whether test_type is walking or balance test
+        version          (type: str): Define which version the data is sourced from
+    Return:
+        Rtype: pd.DataFrame
+        Cleaned dataset with filepaths to synaseCache columns annotated based on filepath_colname parameter
+    """
+    metadata = ["appVersion", "phoneInfo", "healthCode", "recordId", "createdOn"]
+    data = data[[feature for feature in data.columns if \
+                            (filepath_colname in feature) or \
+                            feature in metadata]]\
+                            .rename({filepath_colname: "gait.json_pathfile"}, 
+                                       axis = 1)
+    data["test_type"] = test_type
+    data["version"] = version
+    return data
+
+
+
+def main():
+    gaitfeatures = gf_utils.GaitFeaturize()
+    syn = sc.login()
+
+    args = read_args() 
+    metadata_feature = ['recordId', 'healthCode','appVersion', 'phoneInfo', 'createdOn', 'test_type', "version"]
+
+    ## retrieve from synapseTable (gait) version 2 ## 
+    query_data_v1 = query.get_walking_synapse_table(syn = syn, 
+                                                    table_id    = "syn10308918", 
+                                                    version     =  "MPOWER_V1", 
+                                                    retrieveAll = True)
+    
+    ## retrieve from synapseTable (gait) version 2 ## 
+    query_data_v2 = query.get_walking_synapse_table(syn         = syn, 
+                                                    table_id    = "syn12514611", 
+                                                    version     = "MPOWER_V2", 
+                                                    retrieveAll = True)
+    
+    ## retrieve data from passive gait synapseTable ##
+    query_data_passive = query.get_walking_synapse_table(syn        = syn,
+                                                        table_id    = "syn17022539", 
+                                                        version     = "PASSIVE",
+                                                        retrieveAll = True)
+    ## retrieve data from EMS gait synapse table
+    query_data_ems = query.get_walking_synapse_table(syn        = syn,
+                                                    table_id    = "syn10278766", 
+                                                    version     = "MS_ACTIVE",
+                                                    retrieveAll = True)
+    
+
+    mpowerv1_data_outbound = clean_gait_mpower_dataset(data          = query_data_v1, 
+                                                    filepath_colname = "deviceMotion_walking_outbound.json.items_pathfile",
+                                                    test_type        = "walking", 
+                                                    version          = "mpower_v1")
+    
+
+    mpowerv1_data_return = clean_gait_mpower_dataset(data        = query_data_v1, 
+                                                filepath_colname = "deviceMotion_walking_return.json.items_pathfile",
+                                                test_type        = "walking", 
+                                                version          = "mpower_v1")
+
+    mpowerv1_data_balance = clean_gait_mpower_dataset(data       = query_data_v1, 
+                                                filepath_colname = "deviceMotion_walking_rest.json.items_pathfile",
+                                                test_type        = "balance", 
+                                                version          = "mpower_v1")
+
+
+    ems_data_outbound = clean_gait_mpower_dataset(data           = query_data_ems, 
+                                                filepath_colname = "deviceMotion_walking_outbound.json.items_pathfile",
+                                                test_type        = "walking", 
+                                                version          = "ems")
+    
+
+    ems_data_return = clean_gait_mpower_dataset(data             = query_data_ems, 
+                                                filepath_colname = "deviceMotion_walking_return.json.items_pathfile",
+                                                test_type        = "walking", 
+                                                version          = "ems")
+
+    ems_data_balance = clean_gait_mpower_dataset(data            = query_data_ems, 
+                                                filepath_colname = "deviceMotion_walking_rest.json.items_pathfile",
+                                                test_type        = "balance", 
+                                                version          = "ems")
+
+    mpowerv2_data_walking = clean_gait_mpower_dataset(data       = query_data_v2, 
+                                                filepath_colname = "walk_motion.json_pathfile",
+                                                test_type        = "walking", 
+                                                version          = "mpower_v2")
+
+
+    mpowerv2_data_balance = clean_gait_mpower_dataset(data       = query_data_v2, 
+                                                filepath_colname = "balance_motion.json_pathfile",
+                                                test_type        = "balance", 
+                                                version          = "mpower_v2")
+
+    mpowerpassive_data_walking = clean_gait_mpower_dataset(data  = query_data_passive, 
+                                                filepath_colname = "walk_motion.json_pathfile",
+                                                test_type        = "walking", 
+                                                version          = "mpower_passive")
+
+    ## concat all data into one collective dataframe ##
+    data = pd.concat([mpowerv1_data_outbound, 
+                  mpowerv1_data_return, 
+                  mpowerv1_data_balance, 
+                  mpowerv2_data_walking, 
+                  mpowerv2_data_balance,
+                  mpowerpassive_data_walking,
+                  ems_data_outbound, 
+                  ems_data_return, 
+                  ems_data_balance]).reset_index(drop = True)
+    
+
+    prev_stored_data = pd.DataFrame()
+    if args.update:
+        print("\n#########  UPDATING DATA  ################\n")
+        prev_stored_data = query.check_children(syn = syn,
+                                                data_parent_id = "syn21537420", 
+                                                filename = "raw_gait_features.csv")
+        print("currently stored data size (rows): {}".format(prev_stored_data.shape[0]))
+        data = data[~data["recordId"].isin(prev_stored_data["recordId"].unique())]
+        print("new rows that will be stored: {}".format(data.shape[0]))
+    print("dataset combined, total rows for processing job are %s" %data.shape[0])
+
+    ## featurize data ##
+    data = query.parallel_func_apply(data, gaitfeatures.featurize_wrapper, 
+                                            int(args.cores), int(args.partition)) 
+    
+    ## concat previously stored data with current ## 
+    data = pd.concat([prev_stored_data, data]).reset_index(drop = True)
+
+    query.save_data_to_synapse(syn = syn, 
+                                data = data, 
+                                output_filename = "raw_gait_features.csv",
+                                data_parent_id = "syn21537420")
+    
+    cleaned_rotation_data = data[data["gait.rotation_features"] != "#ERROR"].drop(["gait.walk_features"], axis = 1)
+    cleaned_rotation_data = query.normalize_list_dicts_to_dataframe_rows(cleaned_rotation_data, ["gait.rotation_features"])
+    rotation_feature = [feat for feat in cleaned_rotation_data.columns if "rotation." in feat]
+    features = metadata_feature + rotation_feature
+    query.save_data_to_synapse(syn = syn, 
+                            data = cleaned_rotation_data[features], 
+                            output_filename = "rotational_gait_features.csv",
+                            data_parent_id = "syn21537420")
+    print("Saved rotation data") 
+    
+    cleaned_walk_data = data[data["gait.walk_features"] != "#ERROR"].drop(["gait.rotation_features"], axis = 1)
+    cleaned_walk_data = query.normalize_list_dicts_to_dataframe_rows(cleaned_walk_data, ["gait.walk_features"])
+    walking_feature = [feat for feat in cleaned_walk_data.columns if "walking." in feat]
+    features = metadata_feature + walking_feature
+    query.save_data_to_synapse(syn = syn, 
+                                data = cleaned_walk_data[features], 
+                                output_filename = "nonrotational_gait_features.csv",
+                                data_parent_id = "syn21537420") 
+
+    print("Saved walking data")                                                
+    
+
+
+if __name__ ==  '__main__': 
+    start_time = time.time()
+    main()
+    print("--- %s seconds ---" % (time.time() - start_time))
