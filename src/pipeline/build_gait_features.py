@@ -1,6 +1,4 @@
 ## import future function ##
-from __future__ import absolute_import
-from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
@@ -12,19 +10,11 @@ import multiprocessing
 import synapseclient as sc
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import warnings
 import synapseclient as sc
-from sklearn import metrics
 
 ## import local modules ##
-sys.path.append("../../")
-from src.pipeline.utils import query_utils as query
-from src.pipeline.utils import gait_features_utils as gf_utils
-
-## suppress warnings ## 
-warnings.simplefilter("ignore")
+from utils import query_utils as query
+from utils import gait_features_utils as gf_utils
 
 
 def read_args():
@@ -45,10 +35,10 @@ def read_args():
 
 def clean_gait_mpower_dataset(data, filepath_colname, test_type, version):
     """
-    Helper function for cleaning queried dataset from Synapse;
-    * Dataset format is based on a list of metadata columns and 
-    a column that consisted of filepaths to data in .synapseCache
-    * Annotate test_types and versions based on function parameter
+    Helper function for cleaning queried dataset from SynapseTable;
+    Cleaning Process: 
+    -> metadata feature columns will be collected in synapseTable
+    -> for each filepath column name (e.g. gait.json_pathfile)
 
     Args:
         data    (type: pd.DataFrame): A dataframe consisting of metadata from synapseTable and filepath to .synapseCace
