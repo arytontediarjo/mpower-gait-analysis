@@ -49,10 +49,10 @@ def get_walking_synapse_table(syn,
     data = query.asDataFrame()
     
     ## unique table identifier in mpowerV1 and EMS synapse table
-    if (table_version == "MPOWER_V1") or (table_version == "MS_ACTIVE"):
+    if (table_version == "MPOWER_V1") or (table_version == "ELEVATE_MS"):
         column_list = [_ for _ in data.columns if ("deviceMotion" in _)]
     ## unique table identifier in mpowerV2 and passive data
-    elif (table_version == "MPOWER_V2") or (table_version == "PASSIVE") :
+    elif (table_version == "MPOWER_V2") or (table_version == "MPOWER_PASSIVE") :
         column_list = [_ for _ in data.columns if ("json" in _)]
     ## raise error if version is not recognized
     else:
