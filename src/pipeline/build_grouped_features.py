@@ -14,7 +14,7 @@ import synapseclient as sc
 from utils import query_utils as query
 from utils import gait_features_utils as gf_utils
 
-
+## global variables ## 
 GAIT_DATA     = "syn21542870"
 ROTATION_DATA = "syn21542869"
 MATCHED_DATA    = "syn21547110"
@@ -71,24 +71,26 @@ def main():
     rotation_data = query.get_file_entity(syn = syn, synid = ROTATION_DATA)
     match_data = query.get_file_entity(syn = syn, synid = MATCHED_DATA)
     
-    df = rotation_data[(rotation_data["version"] != "mpower_passive") \
-                            & (rotation_data["version"] != "ems") & (rotation_data["test_type"] == "walking")]
-    df = df[(np.isfinite(df["rotation.energy_freeze_index"]))]
+    ## get grouped rotation data ##
+    df = rotation_data[(rotation_data["table_version"] != "MPOWER_PASSIVE") \
+                        & (rotation_data["table_version"] != "ELEVATE_MS") \
+                        & (rotation_data["test_type"] == "walking")]
     df = group_features(df, coord_list = ["y"])
     matched_rotation_analysis_data = pd.merge(df, match_data, on = "healthCode", how = "inner")
     query.save_data_to_synapse(syn = syn,
                                 data = matched_rotation_analysis_data,
-                                output_filename = "grouped_rotation_features.csv",
+                                output_filename = "grouped_rotation_gait_features.csv",
                                 data_parent_id = "syn21537421")
     
-    df = gait_data[(gait_data["version"] != "mpower_passive")\
-                    & (gait_data["version"] != "ems") & (gait_data["test_type"] == "walking")]
-    df = df[(np.isfinite(df["walking.energy_freeze_index"]))]
+    ## get grouped nonrotation data ##
+    df = gait_data[(gait_data["table_version"] != "MPOWER_PASSIVE")\
+                    & (gait_data["table_version"] != "ELEVATE_MS") \
+                    & (gait_data["test_type"] == "walking")]
     df = group_features(df, coord_list = ["x","y","z","AA"])
     matched_walking_analysis_data = pd.merge(df, match_data, on = "healthCode", how = "inner")
     query.save_data_to_synapse(syn = syn,
                                 data = matched_walking_analysis_data,
-                                output_filename = "grouped_walking_features.csv",
+                                output_filename = "grouped_nonrotation_gait_features.csv",
                                 data_parent_id = "syn21537421")
     
 

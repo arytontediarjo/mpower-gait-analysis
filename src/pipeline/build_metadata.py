@@ -1,23 +1,20 @@
-from __future__ import absolute_import
-from __future__ import division
+## import future libraries ## 
 from __future__ import print_function
 from __future__ import unicode_literals
-import sys
-sys.path.append("../../")
-import synapseclient as sc
+
+## import standard libraries ## 
+import time
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import warnings
-from src.pipeline.utils import query_utils as query
-import synapseclient as sc
-from sklearn import metrics
-import time
-import argparse
-import multiprocessing
-warnings.simplefilter("ignore")
 
+## import external libraries ##
+import synapseclient as sc
+
+## import project modules
+from utils import query_utils as query
+from utils import gait_features_utils as gf_utils
+
+## global variables ## 
 DEMO_DATA_V1  = "syn10371840"
 DEMO_DATA_V2  = "syn15673379"
 DEMO_DATA_EMS = "syn10295288"
@@ -117,8 +114,8 @@ def generate_demographic_info(syn, data):
 
 def main():
     gait_data    = query.get_file_entity(syn = syn, synid = "syn21542870")
-    active_data  = gait_data[gait_data["version"] != "mpower_passive"]
-    passive_data = gait_data[gait_data["version"] == "mpower_passive"]
+    active_data  = gait_data[gait_data["table_version"] != "MPOWER_PASSIVE"]
+    passive_data = gait_data[gait_data["table_version"] == "MPOWER_PASSIVE"]
     active_metadata = generate_demographic_info(syn, active_data)
     passive_metadata = generate_demographic_info(syn, passive_data)
     
