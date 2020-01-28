@@ -14,7 +14,7 @@ import pdkit
 from pdkit.utils import butter_lowpass_filter, numerical_integration
 
 ## library imports ##
-import query_utils as query
+import utils.query_utils as query
 
 class GaitFeaturize:
     """
