@@ -1,40 +1,47 @@
 ## future library imports ## 
-from __future__ import division
 from __future__ import unicode_literals
 from __future__ import print_function
-from __future__ import absolute_import
 
 ## standard library import ## 
 import time
-import warnings
+import json
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import warnings
-from scipy import signal
-from scipy.fftpack import (rfft, fftfreq)
-from scipy.signal import (butter, lfilter, correlate, freqz)
-from scipy import interpolate, signal, fft
 from sklearn import metrics
-from pywt import wavedec
 
 ## pdkit imports ##
 import pdkit
 from pdkit.utils import butter_lowpass_filter, numerical_integration
 
 ## library imports ##
-import src.pipeline.utils.query_utils as query
-
-## suppress warnings ## 
-warnings.simplefilter("ignore")
+import query_utils as query
 
 class GaitFeaturize:
     """
-        This is the gait featurization pipeline that is compatible for SageBionetworks synapseTable data pipeline
-        The values listed as default is loosely based on compatible research, and changed based on future requirements
-        and specs. 
+        This is the gait featurization package that combines features from pdkit package,
+        rotation detection algorithm from gyroscope, and gait pipeline with overlapped-moving window.
 
+        - Feature pipeline in summary - 
+        
+        >>  Takes in pdkit formatted time-series gyroscope and userAcceleration
+            pd.dataFrame (pd.DatetimeIndex (unit: s), x, y, z, AA, td (time difference from start (unit: s))) 
+        >>  Detect turning motion from gyroscope data by assessing rotation rate 
+            AUC and duration during zero-crossing period. 
+            If rotation rate AUC * rotation rate duration > <some particular value (2 based on paper)>,
+            zero crossing period will be considered a turning motion
+        >>  Extract rotational motion features and its gait features using pdkit package during rotation period
+        >>  Remove rotational/turning motion period from walking time-series data, 
+            and separate signal data into several non-rotational walking/balance data
+        >>  For each chunk, iterate each chunk using a smaller window <defined by user> 
+            that moves with step size <defined by user> from the starting point;
+            the moving window will compute gait features iteratively, until each part of the chunk has been computed
+
+        Note: 
+                For each recordIds, features will be returned as a list of dictionary, 
+                each of the dictionary inside the list represents one window of feature computation.
+                Afterwards The list of dictionary for each recordIds will be normalized
+                to a more consistent column features. 
+                 
         Args:
             rotation_frequency_cutoff (type: int, float): frequency cutoff for gyroscope data, 
                                                             2 Hz as proposed by research paper (common butterworth filter)
@@ -95,8 +102,10 @@ class GaitFeaturize:
     def detect_zero_crossing(self, array):
         """
         Function to locate zero crossings in a time series signal data
+        
         Args:
             array (type: np.array, list): array of number sequence (type = np.array or list)
+        
         Returns: 
             Rtype: np.array
             Return index location before sign change in longitudinal sequence (type = N x 2 array)
@@ -108,18 +117,32 @@ class GaitFeaturize:
 
     def compute_rotational_features(self, accel_data, rotation_data):
         """
-        Function to calculate rotational movement from gyroscope signals
+        Function to detect rotational movement from gyroscope rotation rate (rad/s^2)
+        and calculate gait features during rotational periods.
+
         Args:
-            accel_data (type: pd.DataFrame)    : columns(timeIndex(index), td (timeDifference), x, y, z, AA) accelerometer dataframe 
-            rotation_data (type: pd.DataFrame) : columns(timeIndex(index), td (timeDifference), x, y, z, AA) gyroscope dataframe 
+            accel_data (type: pd.DataFrame)    : formatted columns(timeIndex(index) in seconds, 
+                                                                    td (timeDifference from start) seconds, 
+                                                                    x, y, z, AA) userAcceleration dataframe 
+            rotation_data (type: pd.DataFrame) : formatted columns(timeIndex(index) in seconds, 
+                                                                    td (timeDifference from start) in seconds, 
+                                                                    x, y, z, AA) rotationRate dataframe 
         
         Returns: 
             RType: List
             List of dictionary of gait features during rotational motion sequence
-            format: [{omega: some_value, ....}, 
-                    {omega: some_value, ....},....]
+            format: [{feature1: some_value, feature2: some_value}, 
+                    {feature1: some_value, feature2: some_value},....]
         """
+
+        ## check if data is formatted to requirements
+        if (set(accel_data.columns) != set(["td", "x", "y", "z", "AA"])) \
+            or set(rotation_data.columns != set(["td", "x", "y", "z", "AA"])):
+            raise Exception("columns are not formatted to pdkit requirements")
+        
         list_rotation = []
+        rotation_sample_rate = rotation_data.shape[0]/rotation_data["td"].iloc[-1]
+        accel_sample_rate = accel_data.shape[0]/accel_data["td"].iloc[-1]
         for orientation in ["x", "y", "z", "AA"]:
             start = 0
             dict_list = {}
@@ -128,7 +151,7 @@ class GaitFeaturize:
             dict_list["turn_duration"] = []
             dict_list["aucXt"] = []
             rotation_data[orientation] = butter_lowpass_filter(data         = rotation_data[orientation], 
-                                                                sample_rate = 100,  ## TODO: change this
+                                                                sample_rate = rotation_sample_rate,  ## TODO: change this
                                                                 cutoff      = self.rotation_frequency_cutoff, 
                                                                 order       = self.rotation_filter_order) 
             zcr_list = self.detect_zero_crossing(rotation_data[orientation].values)
@@ -154,14 +177,15 @@ class GaitFeaturize:
                         turn_window += 1
 
                         ## instantiate pdkit gait processor for processing gait features during rotation ##
-                        gp = pdkit.GaitProcessor(duration        = turn_duration,
-                                                cutoff_frequency = self.pdkit_gait_frequency_cutoff,
-                                                filter_order     = self.rotation_filter_order,
-                                                delta            = self.pdkit_gait_delta)
+                        gp = pdkit.GaitProcessor(duration          = turn_duration,
+                                                cutoff_frequency   = self.pdkit_gait_frequency_cutoff,
+                                                filter_order       = self.rotation_filter_order,
+                                                delta              = self.pdkit_gait_delta,
+                                                sampling_frequency = accel_sample_rate)
                         
                         ## try-except each pdkit features, if error fill with zero
                         ## TODO: most of the features are susceptible towards error e.g. not enough heel strikes
-                        ## should it be remove instead???????
+                        ## should it be removed instead???????
                         try: 
                             strikes, _ = gp.heel_strikes(accel)
                             steps      = np.size(strikes)
@@ -210,7 +234,7 @@ class GaitFeaturize:
                         
                         list_rotation.append({
                                 "rotation.axis"                 : orientation,
-                                "rotation.energy_freeze_index"  : self.calculate_freeze_index(accel)[0],
+                                "rotation.energy_freeze_index"  : self.calculate_freeze_index(accel, accel_sample_rate)[0],
                                 "rotation.window_duration"      : turn_duration,
                                 "rotation.auc"                  : auc,      ## radian
                                 "rotation.omega"                : omega,    ## radian/secs 
@@ -232,20 +256,27 @@ class GaitFeaturize:
 
     def split_dataframe_to_dict_chunk_by_interval(self, accel_data, rotation_data):
         """
-        A function to separate dataframe to several chunks separated by rotational motion
-        done by a subject. 
-        Parameter:
-            accel_data    (pd.DataFrame): formatted-columns accelerometer dataframe 
-            rotation_data (pd.DataFrame): formatted-columns rotation dataframe
+        A function to separate dataframe into several chunks by interval of rotational motion 
+        from rotation motion.
+        
+        Args:
+            accel_data (type: pd.DataFrame)    : formatted columns(timeIndex(index) in miliseconds, 
+                                                                    td (timeDifference) in miliseconds, 
+                                                                    x, y, z, AA) userAcceleration dataframe 
+            rotation_data (type: pd.DataFrame) : formatted columns(timeIndex(index) in miliseconds, 
+                                                                    td (timeDifference) in miliseconds, 
+                                                                    x, y, z, AA) rotationRate dataframe 
         
         Returns: 
             RType: Dictionary (contains chunk of dataframes)
             A dictionary mapping of data chunks of non-rotational motion
-            Return format: {"chunk1": pd.DataFrame, 
-                            "chunk2": pd.DataFrame, etc ......}
+            Return format (given one rotation motion): {"chunk1": pd.DataFrame, 
+                                                        "chunk2": pd.DataFrame}
         """
-        if (not isinstance(accel_data, pd.DataFrame)):
-            raise Exception("please use dataframe for acceleration")
+        if (set(accel_data.columns) != set(["td", "x", "y", "z", "AA"])) \
+            or set(rotation_data.columns != set(["td", "x", "y", "z", "AA"])):
+            raise Exception("columns are not formatted to pdkit requirements")
+        
         data_chunk = {}
         window = 1 
         last_stop = 0
@@ -274,14 +305,16 @@ class GaitFeaturize:
     def compute_pdkit_feature_per_window(self, data):
         """
         A modified function to calculate feature per smaller time window chunks
+        
         Args: 
             data (pd.DataFrame) : dataframe of longitudinal signal data
             orientation (str)   : coordinate orientation of the time series
+        
         Returns:
             RType: List
             returns list of dict of walking features using PDKIT package
-            Return format: [{steps: some_value, ...}, 
-                            {steps: some_value, ...}, ...]
+            Return format: [{feature1: some_value, ...}, 
+                            {feature1: some_value, ...}, ...]
         """
         ts_arr      = []
         for orientation in ["x", "y", "z", "AA"]:
@@ -304,20 +337,24 @@ class GaitFeaturize:
     def generate_pdkit_features_in_dict(self, data, orientation):
         """
         Function to generate pdkit features given orientation and time-series dataframe
+        
         Args:
-            `data` (pd.DataFrame): dataframe of time series (timeIndex, x, y, z, AA, td)
-            `orientation`   (str): axis oriention of walking (type: str)
+            data (pd.DataFrame): formatted dataframe of time series (timeIndex, x, y, z, AA, td)
+            orientation   (str): axis oriention of walking (type: str)
+        
         Returns:
             RType: Dictionary
             Returns a dictionary mapping of pdkit features in walking/balance data
         """
         window_duration = data.td[-1] - data.td[0]
+        accel_sample_rate = data.shape[0]/window_duration
         accel = data[orientation]
         var = accel.var()
-        gp = pdkit.GaitProcessor(duration        = window_duration,
-                                cutoff_frequency = self.pdkit_gait_frequency_cutoff,
-                                filter_order     = self.pdkit_gait_filter_order,
-                                delta            = self.pdkit_gait_delta)
+        gp = pdkit.GaitProcessor(duration          = window_duration,
+                                cutoff_frequency   = self.pdkit_gait_frequency_cutoff,
+                                filter_order       = self.pdkit_gait_filter_order,
+                                delta              = self.pdkit_gait_delta,
+                                sampling_frequency = accel_sample_rate)
         try:
             if (var) < self.variance_cutoff:
                 steps = 0
@@ -393,7 +430,7 @@ class GaitFeaturize:
                 "walking.window_duration"      : window_duration,
                 "walking.window_start"
                 "walking.axis"                 : orientation,
-                "walking.energy_freeze_index"  : self.calculate_freeze_index(accel)[0],
+                "walking.energy_freeze_index"  : self.calculate_freeze_index(accel, accel_sample_rate)[0],
                 "walking.avg_step_duration"    : avg_step_duration,
                 "walking.sd_step_duration"     : sd_step_duration,
                 "walking.steps"                : steps,
@@ -408,24 +445,26 @@ class GaitFeaturize:
                 "walking.symmetry"             : symmetry}
         return feature_dict
 
-    def calculate_freeze_index(self, series):
+    def calculate_freeze_index(self, series, accel_sample_rate):
         """
-        Modified pdkit FoG function; 
-            *removed resampling from the signal
+        Modified pdkit FoG freeze index function to be compatible with 
+        current source code.  
+        
         Args: 
-            `series` (pd.Series): pd.Series of signal in one orientation
+            series          (type = pd.Series): pd.Series of signal in one orientation
+            accel_sample_rate (type = float64): acceleration sampling rate
+        
         Returns:
             array of [freeze index , sumLocoFreeze]
         """
         loco_band   = self.loco_band
         freeze_band = self.freeze_band
         window_size = series.shape[0]
-        sampling_frequency = 100
-        f_res = sampling_frequency / window_size
-        f_nr_LBs = int(loco_band[0] / f_res)
-        f_nr_LBe = int(loco_band[1] / f_res)
-        f_nr_FBs = int(freeze_band[0] / f_res)
-        f_nr_FBe = int(freeze_band[1] / f_res)
+        f_res       = accel_sample_rate / window_size
+        f_nr_LBs    = int(loco_band[0] / f_res)
+        f_nr_LBe    = int(loco_band[1] / f_res)
+        f_nr_FBs    = int(freeze_band[0] / f_res)
+        f_nr_FBe    = int(freeze_band[1] / f_res)
 
         ## normalize series  ## 
         series = series - np.mean(series)
@@ -433,33 +472,40 @@ class GaitFeaturize:
         ## discrete fast fourier transform ##
         Y = np.fft.fft(series, int(window_size))
         Pyy = abs(Y*Y) / window_size
-        areaLocoBand = numerical_integration( Pyy[f_nr_LBs-1 : f_nr_LBe], sampling_frequency)
-        areaFreezeBand = numerical_integration( Pyy[f_nr_FBs-1 : f_nr_FBe], sampling_frequency)
+        areaLocoBand = numerical_integration( Pyy[f_nr_LBs-1 : f_nr_LBe], accel_sample_rate)
+        areaFreezeBand = numerical_integration( Pyy[f_nr_FBs-1 : f_nr_FBe], accel_sample_rate)
+
+        ## edge case: if integration of locomotor band is too small or zero, return #ERROR## 
+        ## freeze index during this time window will not be assessed
+        if areaLocoBand == 0:
+            freezeIndex   = "#ERROR"
+            sumLocoFreeze = "#ERROR"
+            return freezeIndex, sumLocoFreeze 
+        
+        ## ideal case ##  
         sumLocoFreeze = areaFreezeBand + areaLocoBand
         freezeIndex = areaFreezeBand / areaLocoBand
         return freezeIndex, sumLocoFreeze
-        
 
-
-
-    def walk_feature_pipeline(self, filepath):
+    def gait_feature_pipeline(self, filepath):
         """
-        Function for walk feature pipeline, which consist of features from pdkit package 
-        that has been generated as a list. 
+        Function for gait feature pipeline, which consists gait features from pdkit package.
         Pipeline cleaning process:
             >> Zero steps on very low variance signal (10e-3)
             >> Segmenting data from rotational movement
+            >> Featurize segmented data
+            >> Segmented data will be featurized using pdkit
+        
         Args:
-            `filepath`    (str) : string of filepath to /.synapseCache 
+            filepath    (str) : string of filepath to .synapseCache 
+        
         Returns:
             RType: List
-            return combined list of walking data from several chunks
+            Return combined list of walking data from several chunks
         """    
-        accel_ts    = query.get_sensor_ts_from_filepath(filepath = filepath, 
-                                            sensor = "userAcceleration")
-        rotation_ts = query.get_sensor_ts_from_filepath(filepath = filepath, 
-                                            sensor = "rotationRate")
-        # return errors # 
+        accel_ts    = query.get_sensor_data_from_filepath(self, filepath = filepath, sensor = "userAcceleration")
+        rotation_ts = query.get_sensor_data_from_filepath(self, filepath = filepath, sensor = "rotationRate")
+        # if time series is not dataframe return as #ERROR # 
         if not ((isinstance(rotation_ts, pd.DataFrame) and isinstance(accel_ts, pd.DataFrame))):
             return "#ERROR"
         rotation_occurence = self.compute_rotational_features(accel_ts, rotation_ts)
@@ -468,42 +514,44 @@ class GaitFeaturize:
         for chunks in gait_dict.keys():
             gait_feature_arr.append(self.compute_pdkit_feature_per_window(data = gait_dict[chunks]))
         gait_feature_arr = [j for i in gait_feature_arr for j in i]
+
+        ## if no feature is appended to the chunk return as #ERROR ##
         if len(gait_feature_arr) == 0:
             return "#ERROR"
         return gait_feature_arr
 
-
+        
     def rotation_feature_pipeline(self, filepath):
         """
         Function for featurizing rotation pipeline, which consist of features from pdkit package 
         that has been generated as a list on the rotation sequence 
-        Pipeline cleaning process:
-            >> Zero steps on very low variance signal (10e-3)
-            >> Segmenting data from rotational movement
+        
         Args:
-            `filepath`    (str) : string of filepath to .synapseCache 
+            Filepath    (str) : string of filepath to .synapseCache 
+        
         Returns:
             RType: List
-            return combined list of walking data from several chunks
+            Return combined list of walking data from several chunks
         """  
-        rotation_ts = query.get_sensor_ts_from_filepath(filepath = filepath, 
-                                                        sensor = "rotationRate")
-        accel_ts = query.get_sensor_ts_from_filepath(filepath = filepath, 
-                                                        sensor = "userAcceleration")                                  
+        rotation_ts = query.get_sensor_data_from_filepath(self, filepath = filepath, sensor = "rotationRate")
+        accel_ts = query.get_sensor_data_from_filepath(self, filepath = filepath, sensor = "userAcceleration")   
+        ## check if time series is of type dataframe                       
         if not ((isinstance(rotation_ts, pd.DataFrame) and isinstance(accel_ts, pd.DataFrame))):
             return "#ERROR"
         rotation_ts = self.compute_rotational_features(accel_ts, rotation_ts)
+
+        ## if no feature is appended to the rotation list return as #ERROR ##
         if len(rotation_ts) == 0:
             return "#ERROR"
         return rotation_ts
 
     def annotate_consecutive_zeros(self, data, feature):
         """
-        Function to annotate consecutive zeros in a dataframe
-
+        TODO: has not been implemented to model, work in progress
+        Function to annotate consecutive zeros in a column features in a pd.DataFrame
         Args:
-            `data`    : dataframe
-            `feature` : feature to assess on counting consecutive zeros
+            data (pd.DataFrame): A pandas dataframe 
+            feature       (str): feature to assess on counting consecutive zeros
         
         returns:
             A new column-series of data with counted consecutive zeros (if available)
@@ -515,12 +563,15 @@ class GaitFeaturize:
 
     def featurize_wrapper(self, data):
         """
-        wrapper function for multiprocessing jobs (walking/balance)
+        Multiprocessing wrapper function for multiprocessing jobs (walking/balance)
+        
         Args:
-            `data` (pd.DataFrame): takes in pd.DataFrame
-        returns a json file featurized walking data
+            data (pd.DataFrame): takes in pd.DataFrame of pathfile to synapseCache
+        
+        Returns:
+            returns a list of json file featurized walking data on features column
         """
-        data["gait.walk_features"] = data["gait.json_pathfile"].apply(self.walk_feature_pipeline)
+        data["gait.walk_features"] = data["gait.json_pathfile"].apply(self.gait_feature_pipeline)
         data["gait.rotation_features"] = data["gait.json_pathfile"].apply(self.rotation_feature_pipeline)
         return data
 
