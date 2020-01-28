@@ -1,23 +1,18 @@
-from __future__ import absolute_import
-from __future__ import division
+## import future libraries ## 
 from __future__ import print_function
 from __future__ import unicode_literals
-import sys
-sys.path.append("../../")
-import synapseclient as sc
+
+## import standard libraries ## 
+import time
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import warnings
-from src.pipeline.utils import query_utils as query
-from src.pipeline.utils import gait_features_utils as gf_utils
+
+## import external libraries ##
 import synapseclient as sc
-from sklearn import metrics
-import time
-import argparse
-import multiprocessing
-warnings.simplefilter("ignore")
+
+## import project modules
+from utils import query_utils as query
+from utils import gait_features_utils as gf_utils
 
 
 GAIT_DATA     = "syn21542870"
