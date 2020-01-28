@@ -17,10 +17,19 @@ from utils import query_utils as query
 from utils import gait_features_utils as gf_utils
 
 
+## GLOBAL VARIABLES ## 
+GAIT_MPOWER_V1_TABLE      =  "syn10308918"
+GAIT_MPOWER_V2_TABLE      =  "syn12514611"
+GAIT_MPOWER_PASSIVE_TABLE =  "syn17022539"
+GAIT_EMS_TABLE            =  "syn10278766"
+USED_SCRIPT               =   "%s/mpower-gait-analysis/src/pipeline/%s"
+
+
+
 def read_args():
     """
     Function for parsing in argument given by client
-    returns argument parameter
+    returns argument parser object
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--update", action = "store_true",
@@ -37,8 +46,8 @@ def clean_gait_mpower_dataset(data, filepath_colname, test_type, version):
     """
     Helper function for cleaning queried dataset from SynapseTable;
     Cleaning Process: 
-    -> metadata feature columns will be collected in synapseTable
-    -> for each filepath column name (e.g. gait.json_pathfile)
+    -> Metadata feature columns will be collected in synapseTable (appVersion, phoneInfo, healthCode etc)
+    -> For each filepath column name (e.g. gait.json_pathfile)
 
     Args:
         data    (type: pd.DataFrame): A dataframe consisting of metadata from synapseTable and filepath to .synapseCace
@@ -153,13 +162,13 @@ def main():
                   ems_data_return, 
                   ems_data_balance]).reset_index(drop = True)
     
-
     prev_stored_data = pd.DataFrame()
     if args.update:
         print("\n#########  UPDATING DATA  ################\n")
         prev_stored_data = query.check_children(syn = syn,
                                                 data_parent_id = "syn21537420", 
                                                 filename = "raw_gait_features.csv")
+        prev_stored_data = prev_stored_data["gait.json_pathfile"].apply(lambda x: eval(x))
         print("currently stored data size (rows): {}".format(prev_stored_data.shape[0]))
         data = data[~data["recordId"].isin(prev_stored_data["recordId"].unique())]
         print("new rows that will be stored: {}".format(data.shape[0]))
@@ -175,7 +184,9 @@ def main():
     query.save_data_to_synapse(syn = syn, 
                                 data = data, 
                                 output_filename = "raw_gait_features.csv",
-                                data_parent_id = "syn21537420")
+                                source_table_id =  [GAIT_EMS_TABLE, GAIT_MPOWER_V1_TABLE, 
+                                                    GAIT_MPOWER_V2_TABLE, GAIT_MPOWER_PASSIVE_TABLE],
+                                data_parent_id  = "syn21537420")
     
     cleaned_rotation_data = data[data["gait.rotation_features"] != "#ERROR"].drop(["gait.walk_features"], axis = 1)
     cleaned_rotation_data = query.normalize_list_dicts_to_dataframe_rows(cleaned_rotation_data, ["gait.rotation_features"])
@@ -183,6 +194,8 @@ def main():
     features = metadata_feature + rotation_feature
     query.save_data_to_synapse(syn = syn, 
                             data = cleaned_rotation_data[features], 
+                            source_table_id =  [GAIT_EMS_TABLE, GAIT_MPOWER_V1_TABLE, 
+                                                GAIT_MPOWER_V2_TABLE, GAIT_MPOWER_PASSIVE_TABLE],
                             output_filename = "rotational_gait_features.csv",
                             data_parent_id = "syn21537420")
     print("Saved rotation data") 
