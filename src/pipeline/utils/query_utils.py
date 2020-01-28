@@ -1,34 +1,39 @@
+## future library imports ## 
+from __future__ import unicode_literals
+from __future__ import print_function
+
+## standard library imports ##
 import sys
 import json 
 import os
-import ast
 import pandas as pd
 import numpy as np
+import multiprocessing as mp
+
+## external library imports ##
 import synapseclient as sc
 from synapseclient import (Entity, Project, Folder, File, Link, Activity)
-import multiprocessing as mp
-from multiprocessing import Pool
 
 
 def get_walking_synapse_table(syn, 
                             table_id, 
-                            version, 
+                            table_version, 
                             healthCodes = None, 
                             recordIds = None, 
                             retrieveAll = False):
     """
     Query synapse walking table entity 
     parameters:  
-    `syn`         : synapse object,             
-    `table_id`    : id of table entity,
-    `version`     : version number (args (string) = ["MPOWER_V1", "MPOWER_V2", "MS_ACTIVE", "PASSIVE"])
-    `healthcodes` : list or array of healthcodes
-    `recordIDs`   : list or of recordIds
+    syn         : synapse object,             
+    table_id    : id of table entity,
+    version     : version number (args (string) = ["MPOWER_V1", "MPOWER_V2", "MS_ACTIVE", "PASSIVE"])
+    healthcodes : list or array of healthcodes
+    recordIDs   : list or of recordIds
     
     returns: a dataframe of recordIds and their respective metadata, alongside their filehandleids and filepaths
              empty filepath will be annotated as "#ERROR" on the dataframe
     """
-    print("Querying %s Data" %version)
+    print("Querying %s Data" %table_version)
 
     if not retrieveAll:
         if not isinstance(recordIds, type(None)):
@@ -44,10 +49,10 @@ def get_walking_synapse_table(syn,
     data = query.asDataFrame()
     
     ## unique table identifier in mpowerV1 and EMS synapse table
-    if (version == "MPOWER_V1") or (version == "MS_ACTIVE"):
+    if (table_version == "MPOWER_V1") or (table_version == "MS_ACTIVE"):
         column_list = [_ for _ in data.columns if ("deviceMotion" in _)]
     ## unique table identifier in mpowerV2 and passive data
-    elif (version == "MPOWER_V2") or (version == "PASSIVE") :
+    elif (table_version == "MPOWER_V2") or (table_version == "PASSIVE") :
         column_list = [_ for _ in data.columns if ("json" in _)]
     ## raise error if version is not recognized
     else:
@@ -84,60 +89,59 @@ def get_walking_synapse_table(syn,
     cols = [feat for feat in data.columns if "path_id" not in feat]
     return data[cols]
 
-
-def get_sensor_ts_from_filepath(filepath, sensor): 
-    """
-    Function to get accelerometer data given a filepath,
-    will adjust to different table entity versions accordingly by 
-    extracting specific keys in json pattern. 
-    Empty filepaths will be annotated with "#ERROR"
-
-    parameters : 
-    `filepath` : string of filepath
-    `sensor`   : the sensor type (userAcceleration, 
-                acceleration with gravity, 
-                gyroscope etc)
-
-    return a tidied version of the dataframe that contains a time-index dataframe (timestamp), 
-    time differences (td), (x, y, z, AA) user acceleration (non-g)
-    """
-
-    ## if empty filepaths return it back ##
-    if not (isinstance(filepath, str) and (filepath != "#ERROR")):
-        return "#ERROR"
-    
-    ## open filepath
-    data = open_filepath(filepath)
-    
-    ## return accelerometer data back if empty ##
-    if data.shape[0] == 0: 
-        return "#ERROR"
-    
-    ## get data from mpowerV2
-    if ("sensorType" in data.columns):
-        try:
-            data = data[data["sensorType"] == sensor]
-            data = clean_accelerometer_data(data)
-        except:
-            return "#ERROR"
-        return data[["td","x", "y", "z", "AA"]]
+def get_sensor_data_from_filepath(self, filepath, sensor): 
+        """
+        Function to get sensor data given a filepath, and sensor type
+        will adjust to different table entity versions accordingly by 
+        extracting specific keys in json patterns. 
         
-    ## get data from mpowerV1
-    else:
-        try:
-            data = data[["timestamp", sensor]]
-        except:
+        Note: Empty filepaths, Empty Dataframes will be annotated with "#ERROR"
+
+        Args: 
+            filepath (type: string): string of filepath
+            sensor   (type: string): the sensor type (userAcceleration, 
+                                                    acceleration with gravity, 
+                                                    gyroscope etc. from time series)
+
+        return a formatted version of the dataframe that contains a time-index dataframe (timestamp), 
+        time differences , (x, y, z, AA) user acceleration (non-g)
+        """
+        ## if empty filepaths return it back ##
+        if not (isinstance(filepath, str) and (filepath != "#ERROR")):
             return "#ERROR"
-        data["x"] = data[sensor].apply(lambda x: x["x"])
-        data["y"] = data[sensor].apply(lambda x: x["y"])
-        data["z"] = data[sensor].apply(lambda x: x["z"])
-        data = data.drop([sensor], axis = 1)
-        data = clean_accelerometer_data(data)
-        return data[["td","x", "y", "z", "AA"]]
         
+        ## open filepath ##
+        with open(filepath) as f:
+            json_data = f.read()
+            data = pd.DataFrame(json.loads(json_data))
+
+        ## return accelerometer data back if empty ##
+        if data.shape[0] == 0: 
+            return "#ERROR"
+        
+        ## get data from mpowerV2 column patterns ##
+        if ("sensorType" in data.columns):
+            try:
+                data = data[data["sensorType"] == sensor]
+            except:
+                return "#ERROR"
+        
+        ## get data from mpowerV1 column patterns ##
+        else:
+            try:
+                data = data[["timestamp", sensor]]
+            except:
+                return "#ERROR"
+            data["x"] = data[sensor].apply(lambda x: x["x"])
+            data["y"] = data[sensor].apply(lambda x: x["y"])
+            data["z"] = data[sensor].apply(lambda x: x["z"])
+            data = data.drop([sensor], axis = 1)
+        
+        ## format dataframe to dateTimeIndex, td, x, y, z, AA ## 
+        return format_time_series_data(data)
     
 
-def clean_accelerometer_data(data):
+def format_time_series_data(data):
     """
     Generalized function to clean accelerometer data to a desirable format 
     parameter: 
@@ -148,45 +152,13 @@ def clean_accelerometer_data(data):
     """
     data = data.dropna(subset = ["x", "y", "z"])
     date_series = pd.to_datetime(data["timestamp"], unit = "s")
-    data["td"] = date_series - date_series.iloc[0]
-    data["td"] = data["td"].apply(lambda x: x.total_seconds())
+    data["td"] = (date_series - date_series.iloc[0]).apply(lambda x: x.total_seconds())
     data["time"] = data["td"]
     data = data.set_index("time")
     data.index = pd.to_datetime(data.index, unit = "s")
     data["AA"] = np.sqrt(data["x"]**2 + data["y"]**2 + data["z"]**2)
     data = data.sort_index()
-    
-    ## check if datetime index is sorted ##
-    if all(data.index[:-1] <= data.index[1:]):
-        return data 
-    else:
-        sys.exit('Time Series File is not Sorted')
-
-
-def open_filepath(filepath):
-    """
-    General Function to open a filepath 
-    parameter: 
-    `filepath`: filepath to designated synapsecache
-    return: pandas dataframe of the respective filepath
-    """
-    with open(filepath) as f:
-        json_data = f.read()
-        data = pd.DataFrame(json.loads(json_data))
-    return data
-
-
-def get_all_healthcodes_from_synTable(syn, table_id):
-    """
-    Function to get healthCodes in python list format
-    parameter:  
-    `syn`      : syn object,            
-    `table_id` : table that user want to query from,    
-    returns list of healthcodes
-    """
-    healthcode_list = list(syn.tableQuery("select distinct(healthCode) as healthCode from {}".format(table_id))
-                                   .asDataFrame()["healthCode"])
-    return healthcode_list
+    return data 
     
     
 def save_data_to_synapse(syn,
@@ -196,7 +168,6 @@ def save_data_to_synapse(syn,
                         used_script = None,
                         source_table_id = None,
                         remove = True): 
-
     """
     Function to save data to synapse given a parent id, used script, 
     and source table where the query was sourced
@@ -270,20 +241,6 @@ def normalize_list_dicts_to_dataframe_rows(data, features):
     return data
 
  
-def fix_column_name(data):
-    """
-    Function to fix column names to be consistent accross differnt tables
-    parameter:
-    `data`: pandas DataFrame
-    returns a dataframe with fixed column feature naming conventions
-    """
-    for feature in filter(lambda x: "feature" in x, data.columns): 
-        data  = data.rename({feature: "%s"\
-                            %(feature.split("features_")[1])}, axis = 1)
-    return data
-
-
-
 def get_file_entity(syn, synid):
     """
     Get data (csv,tsv) file entity and turn it into pandas csv
@@ -301,8 +258,6 @@ def get_file_entity(syn, synid):
     data = pd.read_csv(entity["path"],index_col = 0, sep = separator)
     return data
 
-
-
 def parallel_func_apply(df, func, no_of_processors, chunksize):
     """
     Function for parallelizing pandas dataframe processing
@@ -315,7 +270,7 @@ def parallel_func_apply(df, func, no_of_processors, chunksize):
     """
     df_split = np.array_split(df, chunksize)
     print("Currently running on {} processors".format(no_of_processors))
-    pool = Pool(no_of_processors)
+    pool = mp.Pool(no_of_processors)
     map_values = pool.map(func, df_split)
     df = pd.concat(map_values)
     pool.close()
