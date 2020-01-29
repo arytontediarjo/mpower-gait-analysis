@@ -130,12 +130,12 @@ def get_sensor_data_from_filepath(self, filepath, sensor):
         else:
             try:
                 data = data[["timestamp", sensor]]
+                data["x"] = data[sensor].apply(lambda x: x["x"])
+                data["y"] = data[sensor].apply(lambda x: x["y"])
+                data["z"] = data[sensor].apply(lambda x: x["z"])
+                data = data.drop([sensor], axis = 1)
             except:
                 return "#ERROR"
-            data["x"] = data[sensor].apply(lambda x: x["x"])
-            data["y"] = data[sensor].apply(lambda x: x["y"])
-            data["z"] = data[sensor].apply(lambda x: x["z"])
-            data = data.drop([sensor], axis = 1)
         
         ## format dataframe to dateTimeIndex, td, x, y, z, AA ## 
         return format_time_series_data(data)
@@ -150,6 +150,8 @@ def format_time_series_data(data):
             x (float64), y (float64), z (float64),
             AA (float64) dataframe    
     """
+    if data.shape[0] == 0:
+        raise Exception("Empty DataFrame")
     data = data.dropna(subset = ["x", "y", "z"])
     date_series = pd.to_datetime(data["timestamp"], unit = "s")
     data["td"] = (date_series - date_series.iloc[0]).apply(lambda x: x.total_seconds())
@@ -158,7 +160,7 @@ def format_time_series_data(data):
     data.index = pd.to_datetime(data.index, unit = "s")
     data["AA"] = np.sqrt(data["x"]**2 + data["y"]**2 + data["z"]**2)
     data = data.sort_index()
-    return data 
+    return data[["td","x","y","z","AA"]] 
     
     
 def save_data_to_synapse(syn,
