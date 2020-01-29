@@ -1,4 +1,4 @@
-## future library imports ## 
+## future liibrary imports ## 
 from __future__ import unicode_literals
 from __future__ import print_function
 
@@ -136,10 +136,6 @@ class GaitFeaturize:
         """
 
         ## check if data is formatted to requirements
-        if (set(accel_data.columns) != set(["td", "x", "y", "z", "AA"])) \
-            or set(rotation_data.columns != set(["td", "x", "y", "z", "AA"])):
-            raise Exception("columns are not formatted to pdkit requirements")
-        
         list_rotation = []
         rotation_sample_rate = rotation_data.shape[0]/rotation_data["td"].iloc[-1]
         accel_sample_rate = accel_data.shape[0]/accel_data["td"].iloc[-1]
@@ -273,9 +269,6 @@ class GaitFeaturize:
             Return format (given one rotation motion): {"chunk1": pd.DataFrame, 
                                                         "chunk2": pd.DataFrame}
         """
-        if (set(accel_data.columns) != set(["td", "x", "y", "z", "AA"])) \
-            or set(rotation_data.columns != set(["td", "x", "y", "z", "AA"])):
-            raise Exception("columns are not formatted to pdkit requirements")
         
         data_chunk = {}
         window = 1 

@@ -164,8 +164,8 @@ def main():
         prev_stored_data = query.check_children(syn = syn,
                                                 data_parent_id = "syn21537420", 
                                                 filename = "raw_gait_features.csv")
-        prev_stored_data["gait.walk_features"]     = prev_stored_data["gait.walk_features"].apply(lambda x: eval(x))
-        prev_stored_data["gait.rotation_features"] = prev_stored_data["gait.rotation_features"].apply(lambda x: eval(x)) 
+        prev_stored_data["gait.walk_features"]     = prev_stored_data["gait.walk_features"].apply(lambda x: eval(x) if x != "#ERROR" else x)
+        prev_stored_data["gait.rotation_features"] = prev_stored_data["gait.rotation_features"].apply(lambda x: eval(x) if x != "#ERROR" else x) 
         print("currently stored data size (rows): {}".format(prev_stored_data.shape[0]))
         data = data[~data["recordId"].isin(prev_stored_data["recordId"].unique())]
         print("new rows that will be stored: {}".format(data.shape[0]))

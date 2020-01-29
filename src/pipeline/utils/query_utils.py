@@ -22,16 +22,29 @@ def get_walking_synapse_table(syn,
                             recordIds = None, 
                             retrieveAll = False):
     """
-    Query synapse walking table entity 
-    parameters:  
-    syn         : synapse object,             
-    table_id    : id of table entity,
-    version     : version number (args (string) = ["MPOWER_V1", "MPOWER_V2", "MS_ACTIVE", "PASSIVE"])
-    healthcodes : list or array of healthcodes
-    recordIDs   : list or of recordIds
+    Utility function to query synapse walking table entity, 
+    can be used for all table versions given a parameter of 
+    lists of user healthcodes and recordIds; 
+    retrieve all parameter can be set to true if required to query 
+    all the gait database
+    -> Querying process:
+        1.) Query data usings synapse tableQuery on non-iOS data (for now), then parse it to dataframe
+        2.) mpower v1 and elevate MS "device_motion" data will be taken, and all json files from mpowerV2 and mpower_passive will be taken
+        3.) Use synapse downloadTableColumns to download all the designated column files from the table
+        4.) Inner join the parsed dataframe from synapse table query dataframe with download Table Columns by their file handle ids
+        5.) Annotate any empty filepaths as "#ERROR"
     
-    returns: a dataframe of recordIds and their respective metadata, alongside their filehandleids and filepaths
-             empty filepath will be annotated as "#ERROR" on the dataframe
+    Args:  
+        syn              : synapse object,             
+        table_id    (str): id of table entity,
+        version     (str): version number (args (string) = ["MPOWER_V1", "MPOWER_V2", "MS_ACTIVE", "PASSIVE"])
+        healthcodes (str): list or array of healthcodes
+        recordIDs   (str): list or of recordIds
+    
+    Return: 
+        RType: pd.DataFrame
+        returns a pandas dataframe of recordIds and their respective metadata, 
+        alongside their file handle ids and file paths with empty file paths annotated to "#ERROR"
     """
     print("Querying %s Data" %table_version)
 
@@ -91,7 +104,7 @@ def get_walking_synapse_table(syn,
 
 def get_sensor_data_from_filepath(self, filepath, sensor): 
         """
-        Function to get sensor data given a filepath, and sensor type
+        Utility Function to get sensor data given a filepath, and sensor type
         will adjust to different table entity versions accordingly by 
         extracting specific keys in json patterns. 
         
@@ -103,8 +116,10 @@ def get_sensor_data_from_filepath(self, filepath, sensor):
                                                     acceleration with gravity, 
                                                     gyroscope etc. from time series)
 
-        return a formatted version of the dataframe that contains a time-index dataframe (timestamp), 
-        time differences , (x, y, z, AA) user acceleration (non-g)
+        Returns:
+            Rtype: pd.DataFrame
+            Return a formatted version of the dataframe that contains an index of time-index dataframe (timestamp), 
+            and columns of time differences in seconds, and sensor measurement in x, y, z coordinate from the filepaths
         """
         ## if empty filepaths return it back ##
         if not (isinstance(filepath, str) and (filepath != "#ERROR")):
@@ -130,12 +145,12 @@ def get_sensor_data_from_filepath(self, filepath, sensor):
         else:
             try:
                 data = data[["timestamp", sensor]]
+                data["x"] = data[sensor].apply(lambda x: x["x"])
+                data["y"] = data[sensor].apply(lambda x: x["y"])
+                data["z"] = data[sensor].apply(lambda x: x["z"])
+                data = data.drop([sensor], axis = 1)
             except:
                 return "#ERROR"
-            data["x"] = data[sensor].apply(lambda x: x["x"])
-            data["y"] = data[sensor].apply(lambda x: x["y"])
-            data["z"] = data[sensor].apply(lambda x: x["z"])
-            data = data.drop([sensor], axis = 1)
         
         ## format dataframe to dateTimeIndex, td, x, y, z, AA ## 
         return format_time_series_data(data)
@@ -143,13 +158,19 @@ def get_sensor_data_from_filepath(self, filepath, sensor):
 
 def format_time_series_data(data):
     """
-    Generalized function to clean accelerometer data to a desirable format 
-    parameter: 
-    `data`: pandas dataframe of time series
-    returns index (datetimeindex), td (float64), 
-            x (float64), y (float64), z (float64),
-            AA (float64) dataframe    
+    Utility function to clean accelerometer data to a desirable format 
+    required by the PDKIT package.
+    
+    Args: 
+        data(type: pd.DataFrame): pandas dataframe of time series
+    
+    Returns:
+        RType: pd.DataFrame
+        Returns an indexed datetimeindex in seconds, time differences in seconds from the start of the test (float), 
+        x (float), y (float), z (float), AA (float) 
     """
+    if data.shape[0] == 0:
+        raise Exception("Empty DataFrame")
     data = data.dropna(subset = ["x", "y", "z"])
     date_series = pd.to_datetime(data["timestamp"], unit = "s")
     data["td"] = (date_series - date_series.iloc[0]).apply(lambda x: x.total_seconds())
@@ -158,29 +179,31 @@ def format_time_series_data(data):
     data.index = pd.to_datetime(data.index, unit = "s")
     data["AA"] = np.sqrt(data["x"]**2 + data["y"]**2 + data["z"]**2)
     data = data.sort_index()
-    return data 
+    return data[["td","x","y","z","AA"]] 
     
     
 def save_data_to_synapse(syn,
                         data, 
                         output_filename,
                         data_parent_id, 
-                        used_script = None,
+                        used_script     = None,
                         source_table_id = None,
-                        remove = True): 
+                        remove          = True): 
     """
-    Function to save data to synapse given a parent id, used script, 
-    and source table where the query was sourced
-    params: 
-    `syn`              = synapse object        
-    `data`             = tabular data, script or notebook 
-    `output_filename`  = the name of the output file 
-    `data_parent_id`   = the parent synid where data will be stored 
-    `used_script`      = git repo url that produces this data (if available)
-    `source_table_id`  = list of source of where this data is produced (if available) 
-    `remove`           = remove data after saving, generally used for csv data 
-
-    returns stored file entity in Synapse Database
+    Utility function to save data to synapse given a parent id, list of used script, 
+    and list of source table where the query was sourced
+    
+    Args: 
+        syn                              = synapse object        
+        data (pd.DataFrame)              = tabular data, script or notebook 
+        output_filename (string)         = the name of the output file 
+        data_parent_id (list, np.array)  = the parent synid where data will be stored 
+        used_script (list, np.array)     = git repo url that produces this data (if available)
+        source_table_id (list, np.array) = list of source of where this data is produced (if available) 
+        remove (boolean)                 = prompt to remove data after saving
+    
+    Returns:
+        Returns stored file entity in Synapse database
     """
     ## path to output filename for reference ##
     path_to_output_filename = os.path.join(os.getcwd(), output_filename)
@@ -209,12 +232,17 @@ def save_data_to_synapse(syn,
   
 def normalize_dict_to_column_features(data, features):
     """
-    Function to normalize column that conatins dictionaries into separate columns
-    in the dataframe
-    parameter: 
-    `data`    : pandas DataFrame       
-    `features` : list of dict target features for normalization 
-    returns a normalized dataframe with column containing dictionary normalized
+    Utiltiy function to normalize column that contains dictionaries into separate columns
+    in the dataframe, for any null values, it will be annotated as "#ERROR"
+    
+    Args: 
+        data (type: pd.DataFrame)  : pandas DataFrame       
+        features (string)          : list of dict target features for normalization 
+    
+    Returns:
+        Rtype: pd.DataFrame
+        Returns a normalized dataframe with column containing normalized dictionary that will span to 
+        dataframe columns
     """
     for feature in features:
         normalized_data = data[feature].map(lambda x: x if isinstance(x, dict) else "#ERROR") \
@@ -226,11 +254,15 @@ def normalize_dict_to_column_features(data, features):
 
 def normalize_list_dicts_to_dataframe_rows(data, features):
     """
-    Function to normalize list of dicts into dataframe of rows
-    parameter:
-        `data`: pandas DataFrame
-        `features`: a list of features for normalization to rows
-    return a normalized dataframe with new rows from normalize list of dicts
+    Utility function to normalize a column that contains list of dictionaries into 
+    separate rows
+    
+    Args:
+        data (pd.DataFrame): pandas DataFrame
+        features   (string): a list of features for normalization to rows
+    
+    Returns: 
+        A normalized dataframe with rows from normalized from list of dictionaries
     """
     for feature in features:
         data = (pd.concat({i: pd.DataFrame(x) for i, x in data[feature].items()})
@@ -243,12 +275,11 @@ def normalize_list_dicts_to_dataframe_rows(data, features):
  
 def get_file_entity(syn, synid):
     """
-    Get data (csv,tsv) file entity and turn it into pandas csv
-    returns pandas dataframe 
-    parameters:
-    `syn`: a syn object
-    `synid`: syn id of file entity
-    returns pandas dataframe
+    Utility function to get data (csv,tsv) file entity and turn it 
+    into pd.DataFrame
+    Args:
+        syn   : a syn object
+        synid : syn id of file entity
     """
     entity = syn.get(synid)
     if (".tsv" in entity["name"]):
@@ -260,13 +291,15 @@ def get_file_entity(syn, synid):
 
 def parallel_func_apply(df, func, no_of_processors, chunksize):
     """
-    Function for parallelizing pandas dataframe processing
+    Utility function for parallelizing pd.DataFrame processing
     parameter: 
-    `df`               = pandas dataframe         
-    `func`             = wrapper function for data processing
-    `no_of_processors` = number of processors to transform the data
-    `chunksize`        = number of partition 
-    return: featurized dataframes
+         df               = pandas DataFrame         
+         func             = wrapper function for data processing
+         no_of_processors = number of processors to transform the data
+         chunksize        = number of partition 
+    Returns: 
+        RType: pd.DataFrame
+        Returns a transformed dataframe from the wrapper apply function 
     """
     df_split = np.array_split(df, chunksize)
     print("Currently running on {} processors".format(no_of_processors))
@@ -279,13 +312,14 @@ def parallel_func_apply(df, func, no_of_processors, chunksize):
 
 def check_children(syn, data_parent_id, filename):
     """
-    Function to check if file is already available
-    if file is available, get all the recordIds and all the file
-    parameter: 
-    `syn` = syn object           
-    `data_parent_id` = the parent folder
-    `output_filename` = the filename
-    returns previously stored dataframe that has the same filename
+    Utility function to check if file is already available
+    If file is available, get all the recordIds and all the file
+    Args: 
+        syn                       = syn object           
+        data_parent_id  (string)  = the synId parent folder
+        filename (string)         = the filename being searched
+    Returns: 
+        Previously stored dataframe that has the same filename parameter
     """
     prev_stored_data = pd.DataFrame({"recordId":[]})
     for children in syn.getChildren(parent = data_parent_id):
@@ -296,6 +330,11 @@ def check_children(syn, data_parent_id, filename):
 
 
 def generate_demographic_info(syn, data):
+    """
+    Utility function for gathering demographic data
+    """
+
+    
     DEMO_DATA_V1 = "syn10371840"
     DEMO_DATA_V2 = "syn15673379"
     
@@ -324,7 +363,6 @@ def generate_demographic_info(syn, data):
     demo_data = pd.concat([demo_data_v1, demo_data_v2]).reset_index(drop = True)
     
     ## check integrity of data ##
-    
     ## check if multiple input of PD ##
     demo_data = pd.merge(demo_data, 
          (demo_data.groupby("healthCode")\
