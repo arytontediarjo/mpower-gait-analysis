@@ -229,6 +229,7 @@ class GaitFeaturize:
                             sd_stride_duration = 0
                         
                         list_rotation.append({
+                                "rotation.sample_rate"          : rotation_sample_rate,
                                 "rotation.axis"                 : orientation,
                                 "rotation.energy_freeze_index"  : self.calculate_freeze_index(accel, accel_sample_rate)[0],
                                 "rotation.window_duration"      : turn_duration,
@@ -420,6 +421,7 @@ class GaitFeaturize:
             symmetry          = 0                                                                                                             
         
         feature_dict = {
+                "walking.sample_rate"          : accel_sample_rate,
                 "walking.window_duration"      : window_duration,
                 "walking.window_start"
                 "walking.axis"                 : orientation,
