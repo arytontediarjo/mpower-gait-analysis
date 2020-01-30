@@ -102,7 +102,7 @@ def get_walking_synapse_table(syn,
     cols = [feat for feat in data.columns if "path_id" not in feat]
     return data[cols]
 
-def get_sensor_data_from_filepath(self, filepath, sensor): 
+def get_sensor_data_from_filepath(filepath, sensor): 
         """
         Utility Function to get sensor data given a filepath, and sensor type
         will adjust to different table entity versions accordingly by 

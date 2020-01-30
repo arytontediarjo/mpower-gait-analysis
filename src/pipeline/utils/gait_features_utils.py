@@ -146,11 +146,8 @@ class GaitFeaturize:
             dict_list["auc"] = []
             dict_list["turn_duration"] = []
             dict_list["aucXt"] = []
-
-            #TODO: on low pass filter sampling frequency should be higher than frequency cutoff based on low pass filter, thus,
-            # I will keep this at 100 Hz for now
             rotation_data[orientation] = butter_lowpass_filter(data         = rotation_data[orientation], 
-                                                                sample_rate = 100,  ## TODO: change this
+                                                                sample_rate = rotation_sample_rate,  ## TODO: change this
                                                                 cutoff      = self.rotation_frequency_cutoff, 
                                                                 order       = self.rotation_filter_order) 
             zcr_list = self.detect_zero_crossing(rotation_data[orientation].values)
@@ -180,7 +177,7 @@ class GaitFeaturize:
                                                 cutoff_frequency   = self.pdkit_gait_frequency_cutoff,
                                                 filter_order       = self.rotation_filter_order,
                                                 delta              = self.pdkit_gait_delta,
-                                                sampling_frequency = 100)
+                                                sampling_frequency = accel_sample_rate)
                         
                         ## try-except each pdkit features, if error fill with zero
                         ## TODO: most of the features are susceptible towards error e.g. not enough heel strikes
@@ -232,7 +229,6 @@ class GaitFeaturize:
                             sd_stride_duration = 0
                         
                         list_rotation.append({
-                                "rotation.sample_rate"          : rotation_sample_rate,
                                 "rotation.axis"                 : orientation,
                                 "rotation.energy_freeze_index"  : self.calculate_freeze_index(accel, accel_sample_rate)[0],
                                 "rotation.window_duration"      : turn_duration,
@@ -351,7 +347,7 @@ class GaitFeaturize:
                                 cutoff_frequency   = self.pdkit_gait_frequency_cutoff,
                                 filter_order       = self.pdkit_gait_filter_order,
                                 delta              = self.pdkit_gait_delta,
-                                sampling_frequency = 100)
+                                sampling_frequency = accel_sample_rate)
         try:
             if (var) < self.variance_cutoff:
                 steps = 0
@@ -424,7 +420,6 @@ class GaitFeaturize:
             symmetry          = 0                                                                                                             
         
         feature_dict = {
-                "walking.sampling_rate"        : accel_sample_rate,
                 "walking.window_duration"      : window_duration,
                 "walking.window_start"
                 "walking.axis"                 : orientation,
@@ -501,8 +496,8 @@ class GaitFeaturize:
             RType: List
             Return combined list of walking data from several chunks
         """    
-        accel_ts    = query.get_sensor_data_from_filepath(self, filepath = filepath, sensor = "userAcceleration")
-        rotation_ts = query.get_sensor_data_from_filepath(self, filepath = filepath, sensor = "rotationRate")
+        accel_ts    = query.get_sensor_data_from_filepath(filepath = filepath, sensor = "userAcceleration")
+        rotation_ts = query.get_sensor_data_from_filepath(filepath = filepath, sensor = "rotationRate")
         # if time series is not dataframe return as #ERROR # 
         if not ((isinstance(rotation_ts, pd.DataFrame) and isinstance(accel_ts, pd.DataFrame))):
             return "#ERROR"
@@ -531,8 +526,8 @@ class GaitFeaturize:
             RType: List
             Return combined list of walking data from several chunks
         """  
-        rotation_ts = query.get_sensor_data_from_filepath(self, filepath = filepath, sensor = "rotationRate")
-        accel_ts = query.get_sensor_data_from_filepath(self, filepath = filepath, sensor = "userAcceleration")   
+        rotation_ts = query.get_sensor_data_from_filepath(filepath = filepath, sensor = "rotationRate")
+        accel_ts = query.get_sensor_data_from_filepath(filepath = filepath, sensor = "userAcceleration")   
         ## check if time series is of type dataframe                       
         if not ((isinstance(rotation_ts, pd.DataFrame) and isinstance(accel_ts, pd.DataFrame))):
             return "#ERROR"
