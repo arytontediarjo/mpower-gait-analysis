@@ -22,35 +22,77 @@ syn = sc.login()
 
 
 def iqr(x):
+    """
+    Function for getting IQR value
+    """
     return q75(x) - q25(x)
 def q25(x):
+    """
+    Function for getting first quantile
+    """
     return x.quantile(0.25)
 def q75(x):
+    """
+    Function for getting third quantile
+    """
     return x.quantile(0.75)
 def valrange(x):
+    """
+    Function for getting the value range
+    """
     return x.max() - x.min()
 def kurtosis(x):
+    """
+    Function to retrieve kurtosis 
+    """
     return x.kurt()
 def skew(x):
+    """
+    Function to retrieve skewness 
+    """
     return x.skew()
+
 def separate_data_by_axis(data, axis):
+    """
+    Function to separate data by its axial coordinates
+    and annotate column names by its axial coordinate
+    example: <axis>.<name_of_feature>
+    
+    Args:
+        data (type: pd.DataFrame): pandas dataframe of features, with ROWS of different axis
+        axis (type: string)      : axial coordinates
+    """
     axis_name = [feat for feat in data.columns if "axis" in feat][0]
     data = data[data[axis_name] == axis].reset_index(drop = True)
     data.columns = ["{}.{}".format(axis, cols) if "." in cols else cols for cols in data.columns]
     return data
-def group_features(data, coord_list, filtered = False):
 
-    gaitfeatures = gf_utils.GaitFeaturize()
+def group_features(data, coord_list, filtered = False):
+    """
+    Function to group healthcodes by several aggregation computation (max, median, mean, etc)
+
+    Args:
+        data (type: pd.DataFrame): pandas dataframe that consists of columns of recordIds, healthCodes and features
+        axis (tupe: string)      : axial coordinates
+    
+    Returns:
+        RType: pd.DataFrame
+        A grouped healthcode feature dataframe with aggregated features
+    """
+
+    # gaitfeatures = gf_utils.GaitFeaturize()
     data = data[[feat for feat in data.columns if ("." in feat) \
                  or ("healthCode" in feat) or ('recordId' in feat)]]
     data_dict = {}
     for coordinate in coord_list:
         axial_data = separate_data_by_axis(data, coordinate)
-        if filtered:
-            feat = [feat for feat in axial_data.columns if (feat == "%s.walking.steps"%coordinate)\
-                   or (feat == "%s.rotation.steps"%coordinate)][0]
-            axial_data = gaitfeatures.annotate_consecutive_zeros(axial_data, feat).drop(["recordId"], axis = 1)
-            axial_data = axial_data[axial_data["consec_zero_steps_count"] < 15].drop(["consec_zero_steps_count"], axis = 1)
+
+        #TODO: check if filtering will be useful for data # 
+        # if filtered:
+        #     feat = [feat for feat in axial_data.columns if (feat == "%s.walking.steps"%coordinate)\
+        #            or (feat == "%s.rotation.steps"%coordinate)][0]
+        #     axial_data = gaitfeatures.annotate_consecutive_zeros(axial_data, feat).drop(["recordId"], axis = 1)
+        #     axial_data = axial_data[axial_data["consec_zero_steps_count"] < 15].drop(["consec_zero_steps_count"], axis = 1)
         axial_data = axial_data.groupby("healthCode").agg([np.max, 
                                                    np.median, 
                                                    np.mean,
@@ -67,6 +109,9 @@ def group_features(data, coord_list, filtered = False):
     return data
 
 def main():
+    """
+    Main Function
+    """
     gait_data = query.get_file_entity(syn = syn, synid = GAIT_DATA)
     rotation_data = query.get_file_entity(syn = syn, synid = ROTATION_DATA)
     match_data = query.get_file_entity(syn = syn, synid = MATCHED_DATA)
