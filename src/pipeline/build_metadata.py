@@ -23,11 +23,14 @@ syn = sc.login()
 ## helper functions ## 
 def annot_phone(params):
     """
-    Function to annotate phone types
-    parameter:
-    `params`: raw phone type string
+    Function to have lesser phone information choices
+
+    Args:
+        params (type: string): raw phone information
     
-    returns an annotated dataset with lesser choice of phonetypes
+    Returns:
+        Rtype: String
+        Returns an annotated dataset with lesser choice of phone information
     """
     if ";" in params:
         params = params.split(";")[0]
@@ -46,6 +49,29 @@ def annot_phone(params):
     return params
 
 def generate_demographic_info(syn, data):
+    """
+    Function to generate unique healthcode demographic informations from Demographic synapse table.
+    Takes in a dataframe containing healthcode, and join the table and compiled demographic 
+    data by their healthcodes.
+
+    Cleaning process:
+        >> Annotate controls, PD, MS in one column
+        >> Filter demographic data only if gender value is not unknown
+        >> Age, if recorded as birthYear will be based on current year - birthYear
+        >> healthCodes that has double PD status entry will be dropped from the dataframe
+        >> Age is subsetted between 0-120 years old
+        >> Aggregation of records for each healthcodes will be based on number of unique record entries,
+            other metadata features will be aggregated based on most frequent occurences
+
+    Args:
+        syn                : synapse object
+        data (pd.DataFrame): a pandas dataframe object 
+    
+    Returns:
+        RType: pd.DataFrame
+        Returns a dataframe of unique healthcode and its corresponding metadata features
+    """
+
     ## demographics on mpower version 1 ##
     demo_data_v1 = syn.tableQuery("SELECT age, healthCode, \
                                 inferred_diagnosis as PD,  \
@@ -77,7 +103,7 @@ def generate_demographic_info(syn, data):
     
     demo_data = pd.concat([demo_data_v1, demo_data_v2, demo_data_ems]).reset_index(drop = True)
     
-    ## realistic age range ##
+    ## filter age range ##
     demo_data = demo_data[(demo_data["age"] <= 120) & (demo_data["age"] >= 0)]
 
     ##lower case gender ## 
@@ -94,8 +120,10 @@ def generate_demographic_info(syn, data):
     demo_data = demo_data[demo_data["has_double_class_entry"] == False]
     demo_data = demo_data.drop(["birthYear","createdOn", "PD", "MS", "has_double_class_entry"], axis = 1)  
     
+    ## merge dataframe with demographic data ##
     data = pd.merge(data, demo_data, how = "inner", on = "healthCode")
     
+    ## aggregation of metadata features ##
     data= data[["recordId", "healthCode", "phoneInfo", "age", "gender", "class", "version"]].groupby(["healthCode"])\
                 .agg({"recordId": pd.Series.nunique,
                      "phoneInfo": pd.Series.mode,
@@ -113,6 +141,9 @@ def generate_demographic_info(syn, data):
     return data
 
 def main():
+    """
+    Main Function
+    """
     gait_data    = query.get_file_entity(syn = syn, synid = "syn21542870")
     active_data  = gait_data[gait_data["table_version"] != "MPOWER_PASSIVE"]
     passive_data = gait_data[gait_data["table_version"] == "MPOWER_PASSIVE"]

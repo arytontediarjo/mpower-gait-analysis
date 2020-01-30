@@ -329,57 +329,5 @@ def check_children(syn, data_parent_id, filename):
     return prev_stored_data
 
 
-def generate_demographic_info(syn, data):
-    """
-    Utility function for gathering demographic data
-    """
-
-    
-    DEMO_DATA_V1 = "syn10371840"
-    DEMO_DATA_V2 = "syn15673379"
-    
-    ## demographics on mpower version 1 ##
-    demo_data_v1 = syn.tableQuery("SELECT age, healthCode, \
-                                inferred_diagnosis as PD,  \
-                                gender FROM {} \
-                                where dataGroups NOT LIKE '%test_user%'".format(DEMO_DATA_V1)).asDataFrame()
-    demo_data_v1 = demo_data_v1[(demo_data_v1["gender"] == "Female") | (demo_data_v1["gender"] == "Male")]
-    demo_data_v1 = demo_data_v1.dropna(subset = ["PD"], thresh = 1)                     ## drop if no diagnosis
-    demo_data_v1["PD"] = demo_data_v1["PD"].map({True :1.0, False:0.0})                 ## encode as numeric binary
-    demo_data_v1["age"] = demo_data_v1["age"].apply(lambda x: float(x))  
-    demo_data_v1["gender"] = demo_data_v1["gender"].apply(lambda x: x.lower())
-    
-    ## demographics on mpower version 2 ##
-    demo_data_v2 = syn.tableQuery("SELECT birthYear, createdOn, healthCode, \
-                                    diagnosis as PD, sex as gender FROM {} \
-                                    where dataGroups NOT LIKE '%test_user%'".format(DEMO_DATA_V2)).asDataFrame()
-    demo_data_v2        = demo_data_v2[(demo_data_v2["gender"] == "male") | (demo_data_v2["gender"] == "female")]
-    demo_data_v2        = demo_data_v2[demo_data_v2["PD"] != "no_answer"]               
-    demo_data_v2["PD"]  = demo_data_v2["PD"].map({"parkinsons":1, "control":0})
-    demo_data_v2["birthYear"] = demo_data_v2[demo_data_v2["birthYear"].apply(lambda x: True if x>=0 else False)]
-    demo_data_v2["age"] = pd.to_datetime(demo_data_v2["createdOn"], unit = "ms").dt.year - demo_data_v2["birthYear"] 
-    
-    
-    demo_data = pd.concat([demo_data_v1, demo_data_v2]).reset_index(drop = True)
-    
-    ## check integrity of data ##
-    ## check if multiple input of PD ##
-    demo_data = pd.merge(demo_data, 
-         (demo_data.groupby("healthCode")\
-          .nunique()["PD"] >= 2)\
-            .reset_index()\
-                .rename({"PD":"has_double_PD_entry"}, axis = 1),
-         on = "healthCode", 
-         how = "left")
-    demo_data = demo_data[demo_data["has_double_PD_entry"] == False]
-    
-    ## realistic age range ##
-    demo_data = demo_data[(demo_data["age"] <= 110) & (demo_data["age"] >= 10)]
-    demo_data = demo_data.drop(["birthYear","createdOn", "has_double_PD_entry"], axis = 1)  
-    
-    data = pd.merge(data, demo_data, how = "inner", on = "healthCode")
-    return data
-
-
 
     
