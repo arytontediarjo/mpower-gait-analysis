@@ -156,7 +156,7 @@ def main():
                   mpowerpassive_data_walking,
                   ems_data_outbound, 
                   ems_data_return, 
-                  ems_data_balance]).reset_index(drop = True)
+                  ems_data_balance]).reset_index(drop = True).tail(150000)
     
     prev_stored_data = pd.DataFrame()
     if args.update:

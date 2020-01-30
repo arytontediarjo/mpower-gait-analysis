@@ -138,7 +138,10 @@ def get_sensor_data_from_filepath(self, filepath, sensor):
                 return "#ERROR"
         
         ## format dataframe to dateTimeIndex, td, x, y, z, AA ## 
-        return format_time_series_data(data)
+        if data.shape[0] != 0:
+            return format_time_series_data(data)
+        else:
+            return "#ERROR"
     
 
 def format_time_series_data(data):
