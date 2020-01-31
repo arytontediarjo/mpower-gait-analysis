@@ -151,12 +151,13 @@ def get_sensor_data_from_filepath(filepath, sensor):
                 data = data.drop([sensor], axis = 1)
             except:
                 return "#ERROR"
-        
-        ## format dataframe to dateTimeIndex, td, x, y, z, AA ## 
-        if data.shape[0] != 0:
-            return format_time_series_data(data)
-        else:
+
+        ## if shape of data is zero return #ERROR ##
+        if data.shape[0] == 0:
             return "#ERROR"
+        
+        ## format dataframe to dateTimeIndex, td, x, y, z
+        return format_time_series_data(data)
     
 
 def format_time_series_data(data):

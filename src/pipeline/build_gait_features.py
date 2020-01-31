@@ -54,7 +54,7 @@ def clean_gait_mpower_dataset(data, filepath_colname, test_type, table_version):
                                         and filepath to .synapseCace
         filepath_colname (type: str): Change column name to something that is consistent for analysis
         test_type        (type: str): Define whether test_type is walking or balance test
-        source           (type: str): Define where data is sourced from ("elevate_ms", "mpower_v1", 
+        table_version    (type: str): Define where data is sourced from ("elevate_ms", "mpower_v1", 
                                         "mpower_v2", "mpower_passive")
     
     Return:
@@ -112,8 +112,13 @@ def main():
                                                 test_type        = "walking", 
                                                 table_version    = "MPOWER_V1")
 
-    mpowerv1_data_balance = clean_gait_mpower_dataset(data       = query_data_v1, 
+    mpowerv1_data_balance1 = clean_gait_mpower_dataset(data       = query_data_v1, 
                                                 filepath_colname = "deviceMotion_walking_rest.json.items_pathfile",
+                                                test_type        = "balance", 
+                                                table_version    = "MPOWER_V1")
+
+    mpowerv1_data_balance2 = clean_gait_mpower_dataset(data       = query_data_v1, 
+                                                filepath_colname = "deviceMotion_walking.rest.json.items_pathfile",
                                                 test_type        = "balance", 
                                                 table_version    = "MPOWER_V1")
 
@@ -150,7 +155,8 @@ def main():
     ## concat all data into one collective dataframe ##
     data = pd.concat([mpowerv1_data_outbound, 
                   mpowerv1_data_return, 
-                  mpowerv1_data_balance, 
+                  mpowerv1_data_balance1,
+                  mpowerv1_data_balance2, 
                   mpowerv2_data_walking, 
                   mpowerv2_data_balance,
                   mpowerpassive_data_walking,
