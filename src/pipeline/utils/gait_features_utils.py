@@ -11,8 +11,9 @@ from sklearn import metrics
 
 ## pdkit imports ##
 import pdkit
-from pdkit.utils import butter_lowpass_filter, numerical_integration
-
+import pdkit.processor 
+from pdkit.utils import (butter_lowpass_filter, 
+                        numerical_integration)
 ## library imports ##
 import utils.query_utils as query
 
@@ -84,7 +85,8 @@ class GaitFeaturize:
                 window_size                 = 512,
                 step_size                   = 50,
                 loco_band                   = [0.5, 3],
-                freeze_band                 = [3,8]
+                freeze_band                 = [3,8],
+                sampling_frequency          = 100
                 ):
         self.rotation_frequency_cutoff = rotation_frequency_cutoff
         self.rotation_filter_order = rotation_filter_order
@@ -97,8 +99,10 @@ class GaitFeaturize:
         self.step_size = step_size
         self.loco_band = loco_band
         self.freeze_band = freeze_band
+        self.sampling_frequency = sampling_frequency
+        self.gait_processor = pdkit.processor.Processor(sampling_frequency = self.sampling_frequency)
 
-
+    
     def detect_zero_crossing(self, array):
         """
         Function to locate zero crossings in a time series signal data
@@ -115,6 +119,7 @@ class GaitFeaturize:
         zero_crossings = np.where(np.diff(np.sign(array)))[0]
         return zero_crossings
 
+    
     def compute_rotational_features(self, accel_data, rotation_data):
         """
         Function to detect rotational movement from gyroscope rotation rate (rad/s^2)
@@ -137,60 +142,60 @@ class GaitFeaturize:
 
         ## check if data is formatted to requirements
         list_rotation = []
-        rotation_sample_rate = rotation_data.shape[0]/rotation_data["td"].iloc[-1]
-        accel_sample_rate = accel_data.shape[0]/accel_data["td"].iloc[-1]
-        for orientation in ["x", "y", "z", "AA"]:
+        
+        for axis in ["x", "y", "z", "AA"]:
             start = 0
             dict_list = {}
             dict_list["td"] = []
             dict_list["auc"] = []
-            dict_list["turn_duration"] = []
+            dict_list["window_duration"] = []
             dict_list["aucXt"] = []
-            rotation_data[orientation] = butter_lowpass_filter(data         = rotation_data[orientation], 
-                                                                sample_rate = rotation_sample_rate,  ## TODO: change this
-                                                                cutoff      = self.rotation_frequency_cutoff, 
-                                                                order       = self.rotation_filter_order) 
-            zcr_list = self.detect_zero_crossing(rotation_data[orientation].values)
-            turn_window = 0
+            rotation_data[axis] = butter_lowpass_filter(data        = rotation_data[axis], 
+                                                        sample_rate = self.sampling_frequency,
+                                                        cutoff      = self.rotation_frequency_cutoff, 
+                                                        order       = self.rotation_filter_order) 
+            zcr_list = self.detect_zero_crossing(rotation_data[axis].values)
+            num_window = 0
 
-            ## iterate through period of zero crossing list ##
+            ## iterate through list of zero crossing period ##
             for i in zcr_list: 
-                rotation_td = rotation_data["td"].iloc[start:i+1]
-                rotation_rate_data = rotation_data[orientation].iloc[start:i+1]
-                accel = accel_data[orientation].iloc[start:i+1]
-                turn_duration = rotation_data["td"].iloc[i+1] - rotation_data["td"].iloc[start]
-                
+                rotation_period_data    = rotation_data[[axis, "td"]].iloc[start:i+1]
+                accel_subset            = accel_data[axis].iloc[start:i+1]
+                window_start            = rotation_data["td"].iloc[start]  
+                window_end              = rotation_data["td"].iloc[i+1]
+                window_duration         = window_end - window_start   
                 start  = i + 1
                 
                 ## only take data when dataframe shape is bigger than 2 data points ##
-                if (len(rotation_rate_data) >= 2): 
-                    auc   = np.abs(metrics.auc(rotation_td, rotation_rate_data)) 
-                    aucXt = auc * turn_duration
-                    omega = auc / turn_duration
+                if (len(rotation_period_data[axis]) >= 2): 
+                    auc   = np.abs(metrics.auc(rotation_period_data["td"], rotation_period_data[axis])) 
+                    aucXt = auc * window_duration
+                    omega = auc / window_duration
 
                     ## extract aucXt bigger than two ##
                     if aucXt > 2:
-                        turn_window += 1
+                        num_window += 1
 
                         ## instantiate pdkit gait processor for processing gait features during rotation ##
-                        gp = pdkit.GaitProcessor(duration          = turn_duration,
+                        gp = pdkit.GaitProcessor(duration          = window_duration,
                                                 cutoff_frequency   = self.pdkit_gait_frequency_cutoff,
                                                 filter_order       = self.rotation_filter_order,
                                                 delta              = self.pdkit_gait_delta,
-                                                sampling_frequency = accel_sample_rate)
+                                                sampling_frequency = self.sampling_frequency)
                         
                         ## try-except each pdkit features, if error fill with zero
                         ## TODO: most of the features are susceptible towards error e.g. not enough heel strikes
-                        ## should it be removed instead???????
+                        
+                        ## resample isolated user acceleration data to 100 Hz ##
                         try: 
-                            strikes, _ = gp.heel_strikes(accel)
+                            strikes, _ = gp.heel_strikes(accel_subset)
                             steps      = np.size(strikes)
-                            cadence    = steps/turn_duration
+                            cadence    = steps/window_duration
                         except:
                             steps = 0
                             cadence = 0
                         try:
-                            peaks_data = accel.values
+                            peaks_data = accel_subset.values
                             maxtab, _ = peakdet(peaks_data, gp.delta)
                             x = np.mean(peaks_data[maxtab[1:,0].astype(int)] - peaks_data[maxtab[:-1,0].astype(int)])
                             frequency_of_peaks = abs(1/x)
@@ -229,24 +234,23 @@ class GaitFeaturize:
                             sd_stride_duration = 0
                         
                         list_rotation.append({
-                                "rotation.sample_rate"          : rotation_sample_rate,
-                                "rotation.axis"                 : orientation,
-                                "rotation.energy_freeze_index"  : self.calculate_freeze_index(accel, accel_sample_rate)[0],
-                                "rotation.window_duration"      : turn_duration,
-                                "rotation.auc"                  : auc,      ## radian
-                                "rotation.omega"                : omega,    ## radian/secs 
-                                "rotation.aucXt"                : aucXt,    ## radian . secs (based on research paper)
-                                "rotation.window_start"         : rotation_td[0],
-                                "rotation.window_end"           : rotation_td[-1],
-                                "rotation.num_window"           : turn_window,
-                                "rotation.avg_step_duration"    : avg_step_duration,
-                                "rotation.sd_step_duration"     : sd_step_duration,
-                                "rotation.steps"                : steps,
-                                "rotation.cadence"              : cadence,
-                                "rotation.frequency_of_peaks"   : frequency_of_peaks,
-                                "rotation.avg_number_of_strides": avg_number_of_strides,
-                                "rotation.avg_stride_duration"  : avg_stride_duration,
-                                "rotation.sd_stride_duration"   : sd_stride_duration
+                                "rotation_axis"                 : axis,
+                                "rotation_energy_freeze_index"  : self.calculate_freeze_index(accel_subset, self.sampling_frequency)[0],
+                                "rotation_window_duration"      : window_duration,
+                                "rotation_window_start"         : window_start,
+                                "rotation_window_end"           : window_end,
+                                "rotation_auc"                  : auc,      ## radian
+                                "rotation_omega"                : omega,    ## radian/secs 
+                                "rotation_aucXt"                : aucXt,    ## radian . secs (based on research paper)
+                                "rotation_num_window"           : num_window,
+                                "rotation_avg_step_duration"    : avg_step_duration,
+                                "rotation_sd_step_duration"     : sd_step_duration,
+                                "rotation_steps"                : steps,
+                                "rotation_cadence"              : cadence,
+                                "rotation_frequency_of_peaks"   : frequency_of_peaks,
+                                "rotation_avg_number_of_strides": avg_number_of_strides,
+                                "rotation_avg_stride_duration"  : avg_stride_duration,
+                                "rotation_sd_stride_duration"   : sd_stride_duration
                         })
         return list_rotation
 
@@ -279,7 +283,7 @@ class GaitFeaturize:
             data_chunk["chunk1"] = accel_data
             return data_chunk
         rotation_data = pd.DataFrame(rotation_data)
-        for start, end in rotation_data[["rotation.window_start", "rotation.window_end"]].values:
+        for start, end in rotation_data[["rotation_window_start", "rotation_window_end"]].values:
             if start <= 0:
                 last_stop = end
                 continue
@@ -340,28 +344,29 @@ class GaitFeaturize:
             RType: Dictionary
             Returns a dictionary mapping of pdkit features in walking/balance data
         """
-        window_duration = data.td[-1] - data.td[0]
-        accel_sample_rate = data.shape[0]/window_duration
-        accel = data[orientation]
-        var = accel.var()
+        window_start = data.td[0]
+        window_end = data.td[-1]
+        window_duration = window_end - window_start
+        data = data[orientation]
+        var = data.var()
         gp = pdkit.GaitProcessor(duration          = window_duration,
                                 cutoff_frequency   = self.pdkit_gait_frequency_cutoff,
                                 filter_order       = self.pdkit_gait_filter_order,
                                 delta              = self.pdkit_gait_delta,
-                                sampling_frequency = accel_sample_rate)
+                                sampling_frequency = self.sampling_frequency)
         try:
             if (var) < self.variance_cutoff:
                 steps = 0
                 cadence = 0
             else:
-                strikes, _ = gp.heel_strikes(accel)
+                strikes, _ = gp.heel_strikes(data)
                 steps      = np.size(strikes) 
                 cadence    = steps/window_duration
         except:
             steps = 0  
             cadence = 0
         try:
-            peaks_data = accel.values
+            peaks_data = data.values
             maxtab, _ = peakdet(peaks_data, gp.delta)
             x = np.mean(peaks_data[maxtab[1:,0].astype(int)] - peaks_data[maxtab[:-1,0].astype(int)])
             frequency_of_peaks = abs(1/x)
@@ -370,7 +375,7 @@ class GaitFeaturize:
         except:
             frequency_of_peaks = 0
         try:
-            speed_of_gait = gp.speed_of_gait(accel)   
+            speed_of_gait = gp.speed_of_gait(data)   
         except:
             speed_of_gait = 0
         if steps >= 2:   # condition if steps are more than 2, during 2.5 seconds window 
@@ -403,41 +408,41 @@ class GaitFeaturize:
             sd_stride_duration = 0
 
         try:
-            step_regularity   = gp.gait_regularity_symmetry(accel,average_step_duration=avg_step_duration, 
+            step_regularity   = gp.gait_regularity_symmetry(data, average_step_duration=avg_step_duration, 
                                                         average_stride_duration=avg_stride_duration)[0]
         except:
             step_regularity   = 0
         
         try:
-            stride_regularity = gp.gait_regularity_symmetry(accel,average_step_duration=avg_step_duration, 
+            stride_regularity = gp.gait_regularity_symmetry(data, average_step_duration=avg_step_duration, 
                                                         average_stride_duration=avg_stride_duration)[1]
         except:
             stride_regularity = 0     
 
         try:
-            symmetry          =  gp.gait_regularity_symmetry(accel,average_step_duration=avg_step_duration, 
+            symmetry          =  gp.gait_regularity_symmetry(data, average_step_duration=avg_step_duration, 
                                                         average_stride_duration=avg_stride_duration)[2]       
         except:
             symmetry          = 0                                                                                                             
         
         feature_dict = {
-                "walking.sample_rate"          : accel_sample_rate,
-                "walking.window_duration"      : window_duration,
-                "walking.window_start"
-                "walking.axis"                 : orientation,
-                "walking.energy_freeze_index"  : self.calculate_freeze_index(accel, accel_sample_rate)[0],
-                "walking.avg_step_duration"    : avg_step_duration,
-                "walking.sd_step_duration"     : sd_step_duration,
-                "walking.steps"                : steps,
-                "walking.cadence"              : cadence,
-                "walking.frequency_of_peaks"   : frequency_of_peaks,
-                "walking.avg_number_of_strides": avg_number_of_strides,
-                "walking.avg_stride_duration"  : avg_stride_duration,
-                "walking.sd_stride_duration"   : sd_stride_duration,
-                "walking.speed_of_gait"        : speed_of_gait,
-                "walking.step_regularity"      : step_regularity,
-                "walking.stride_regularity"    : stride_regularity,
-                "walking.symmetry"             : symmetry}
+                "walking_window_duration"      : window_duration,
+                "walking_window_start"         : window_start,
+                "walking_window_end"           : window_end,
+                "walking_axis"                 : orientation,
+                "walking_energy_freeze_index"  : self.calculate_freeze_index(data, self.sampling_frequency)[0],
+                "walking_avg_step_duration"    : avg_step_duration,
+                "walking_sd_step_duration"     : sd_step_duration,
+                "walking_steps"                : steps,
+                "walking_cadence"              : cadence,
+                "walking_frequency_of_peaks"   : frequency_of_peaks,
+                "walking_avg_number_of_strides": avg_number_of_strides,
+                "walking_avg_stride_duration"  : avg_stride_duration,
+                "walking_sd_stride_duration"   : sd_stride_duration,
+                "walking_speed_of_gait"        : speed_of_gait,
+                "walking_step_regularity"      : step_regularity,
+                "walking_stride_regularity"    : stride_regularity,
+                "walking_symmetry"             : symmetry}
         return feature_dict
 
     def calculate_freeze_index(self, series, accel_sample_rate):
@@ -498,13 +503,21 @@ class GaitFeaturize:
             RType: List
             Return combined list of walking data from several chunks
         """    
-        accel_ts    = query.get_sensor_data_from_filepath(filepath = filepath, sensor = "userAcceleration")
-        rotation_ts = query.get_sensor_data_from_filepath(filepath = filepath, sensor = "rotationRate")
+        accel_data    = query.get_sensor_data_from_filepath(filepath = filepath, sensor = "userAcceleration")
+        rotation_data = query.get_sensor_data_from_filepath(filepath = filepath, sensor = "rotationRate")
         # if time series is not dataframe return as #ERROR # 
-        if not ((isinstance(rotation_ts, pd.DataFrame) and isinstance(accel_ts, pd.DataFrame))):
+        if not ((isinstance(rotation_data, pd.DataFrame) and isinstance(accel_data, pd.DataFrame))):
             return "#ERROR"
-        rotation_occurence = self.compute_rotational_features(accel_ts, rotation_ts)
-        gait_dict = self.split_dataframe_to_dict_chunk_by_interval(accel_ts, rotation_occurence)
+
+        ## resample signals ##
+        rotation_data = self.gait_processor.resample_signal(rotation_data)
+        accel_data = self.gait_processor.resample_signal(accel_data)
+        rotation_occurence = self.compute_rotational_features(accel_data, rotation_data)
+        
+        ## calculate gait features with rotation data removed ##
+        gait_dict = self.split_dataframe_to_dict_chunk_by_interval(accel_data, rotation_occurence)
+        
+        ## calculate gait features per window iteration ##
         gait_feature_arr = []
         for chunks in gait_dict.keys():
             gait_feature_arr.append(self.compute_pdkit_feature_per_window(data = gait_dict[chunks]))
@@ -528,22 +541,29 @@ class GaitFeaturize:
             RType: List
             Return combined list of walking data from several chunks
         """  
-        rotation_ts = query.get_sensor_data_from_filepath(filepath = filepath, sensor = "rotationRate")
-        accel_ts = query.get_sensor_data_from_filepath(filepath = filepath, sensor = "userAcceleration")   
+        rotation_data = query.get_sensor_data_from_filepath(filepath = filepath, sensor = "rotationRate")
+        accel_data = query.get_sensor_data_from_filepath(filepath = filepath, sensor = "userAcceleration")   
+        
+        
         ## check if time series is of type dataframe                       
-        if not ((isinstance(rotation_ts, pd.DataFrame) and isinstance(accel_ts, pd.DataFrame))):
+        if not ((isinstance(rotation_data, pd.DataFrame) and isinstance(accel_data, pd.DataFrame))):
             return "#ERROR"
-        rotation_ts = self.compute_rotational_features(accel_ts, rotation_ts)
+
+        rotation_data = self.gait_processor.resample_signal(rotation_data)
+        accel_data = self.gait_processor.resample_signal(accel_data)
+        
+        rotation_data = self.compute_rotational_features(accel_data, rotation_data)
 
         ## if no feature is appended to the rotation list return as #ERROR ##
-        if len(rotation_ts) == 0:
+        if len(rotation_data) == 0:
             return "#ERROR"
-        return rotation_ts
+        return rotation_data
 
     def annotate_consecutive_zeros(self, data, feature):
         """
         TODO: has not been implemented to model, work in progress
-        Function to annotate consecutive zeros in a column features in a pd.DataFrame
+        Function to annotate consecutive zeros in a column features in a pd.DataFrame,
+        which can be used to as additional filter 
         Args:
             data (pd.DataFrame): A pandas dataframe 
             feature       (str): feature to assess on counting consecutive zeros
