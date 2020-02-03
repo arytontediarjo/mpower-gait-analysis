@@ -46,9 +46,11 @@ def read_args():
     return args
 
 
-def concat_mpower_datasets(values):
+def concat_mpower_columns(values):
     """
-    Helper function for concatenating data from mPower synapseTable
+    Helper function for concatenating several synapse table columns into standardized name
+    with annotation of which test it conducts, and the synapse table entity is it
+    
     Cleaning Process: 
         -> Metadata feature columns will be collected in synapseTable (appVersion, phoneInfo, healthCode etc)
         -> For each filepath synapseTable column (deviceMotion, walking_motion, etc.) all names will be STANDARDIZED to
@@ -89,15 +91,20 @@ def concat_mpower_datasets(values):
                                        else cols for cols in data_dict[filepath].columns]
     concat_data = pd.concat([values for key, values in data_dict.items()]).reset_index(drop = True)
     concat_data["table_version"] = table_version
-    return concat_data          
+    return concat_data  
 
-def main():
-    gaitfeatures = gf_utils.GaitFeaturize()
-    syn = sc.login()
+def clean_feature_sets(data, target_feature):
     metadata_feature = ['recordId', 'healthCode','appVersion', 
                         'phoneInfo', 'createdOn', 'test_type', 
                         "table_version"]
-
+    feature_cols = metadata_feature + [target_feature]
+    data = data[data[target_feature] != "#ERROR"][feature_cols]
+    data = query.normalize_list_dicts_to_dataframe_rows(data, [target_feature])
+    return data
+    
+def main():
+    gaitfeatures = gf_utils.GaitFeaturize()
+    syn = sc.login()
     args = read_args() 
     data = pd.concat([concat_mpower_datasets(values) for key, 
                       values in data_dict.items()]).reset_index(drop = True)
@@ -125,11 +132,12 @@ def main():
     data = query.parallel_func_apply(data, gaitfeatures.featurize_wrapper, 
                                     int(args.cores), int(args.partition)) 
     
-    cleaned_rotation_data = data[data["gait_rotation_features"] != "#ERROR"].drop(["gait_walk_features"], axis = 1)
-    cleaned_rotation_data = query.normalize_list_dicts_to_dataframe_rows(cleaned_rotation_data, ["gait_rotation_features"])
-    rotation_feature = [feat for feat in cleaned_rotation_data.columns if ("rotation" in feat) and ("pathfile" not in feat)]
-    features = metadata_feature + rotation_feature
-
+    
+    # cleaned_rotation_data = data[data["gait_rotation_features"] != "#ERROR"].drop(["gait_walk_features"], axis = 1)
+    # cleaned_rotation_data = query.normalize_list_dicts_to_dataframe_rows(cleaned_rotation_data, ["gait_rotation_features"])
+    # rotation_feature = [feat for feat in cleaned_rotation_data.columns if ("rotation" in feat) and ("pathfile" not in feat)]
+    # features = metadata_feature + rotation_feature
+    cleaned_rotation_data = clean_feature_sets(data, "gait_rotation_features")
     cleaned_rotation_data = pd.concat([prev_stored_rotation_data, cleaned_rotation_data]).reset_index(drop = True)
 
     query.save_data_to_synapse(syn = syn, 
@@ -137,13 +145,14 @@ def main():
                             source_table_id =  [values["synId"] for key, values in data_dict.items()],
                             output_filename = "rotation_gait_features.csv",
                             data_parent_id = "syn21537420")
+    
     print("\n################################## Saved Rotation Data ######################################\n")
     
-    cleaned_walk_data = data[data["gait_walk_features"] != "#ERROR"].drop(["gait_rotation_features"], axis = 1)
-    cleaned_walk_data = query.normalize_list_dicts_to_dataframe_rows(cleaned_walk_data, ["gait_walk_features"])
-    walking_feature = [feat for feat in cleaned_walk_data.columns if ("walking" in feat) and ("pathfile" not in feat)]
-    features = metadata_feature + walking_feature
-    
+    # cleaned_walk_data = data[data["gait_walk_features"] != "#ERROR"].drop(["gait_rotation_features"], axis = 1)
+    # cleaned_walk_data = query.normalize_list_dicts_to_dataframe_rows(cleaned_walk_data, ["gait_walk_features"])
+    # walking_feature = [feat for feat in cleaned_walk_data.columns if ("walking" in feat) and ("pathfile" not in feat)]
+    # features = metadata_feature + walking_feature
+    cleaned_rotation_data = clean_feature_sets(data, "gait_walk_features")
     cleaned_walk_data = pd.concat([prev_stored_walk_data, cleaned_walk_data]).reset_index(drop = True)
 
     query.save_data_to_synapse(syn = syn, 
@@ -151,6 +160,7 @@ def main():
                                 source_table_id = [values["synId"] for key, values in data_dict.items()],
                                 output_filename = "walking_gait_features.csv",
                                 data_parent_id  = "syn21537420") 
+    
     print("\n################################## Saved Walking Data ######################################\n") 
     
 
@@ -162,6 +172,7 @@ def main():
                                 source_table_id = [values["synId"] for key, values in data_dict.items()],
                                 output_filename = "processed_records.csv",
                                 data_parent_id  = "syn21537420")
+    
     print("\n################################## Saved Processed RecordIds Logging ########################\n") 
     
 
