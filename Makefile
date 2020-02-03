@@ -42,10 +42,13 @@ update:
 train:
 	$(PYTHON_INTERPRETER) src/models/train_model.py 
 
-## Delete all compiled Python files
+## Delete all compiled Python files and files in synapseCache
 clean:
 	find . -type f -name "*.py[co]" -delete
 	find . -type d -name "__pycache__" -delete
+	find ~/.synapseCache -type f -name "processed_records.csv" -delete
+	find ~/.synapseCache -type f -name "walking_gait_features.csv" -delete
+	find ~/.synapseCache -type f -name "rotation_gait_features.csv" -delete
 
 ## Lint using flake8
 lint:

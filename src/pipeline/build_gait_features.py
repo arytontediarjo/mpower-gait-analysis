@@ -104,6 +104,7 @@ def main():
     
     prev_stored_rotation_data = pd.DataFrame()
     prev_stored_walk_data     = pd.DataFrame()
+    processed_records         = pd.DataFrame()
     
     if args.update:
         print("\n#########  UPDATING DATA  ################\n")
@@ -136,7 +137,7 @@ def main():
                             source_table_id =  [values["synId"] for key, values in data_dict.items()],
                             output_filename = "rotation_gait_features.csv",
                             data_parent_id = "syn21537420")
-    print("################################## Saved Rotation Data ######################################")
+    print("\n################################## Saved Rotation Data ######################################\n")
     
     cleaned_walk_data = data[data["gait_walk_features"] != "#ERROR"].drop(["gait_rotation_features"], axis = 1)
     cleaned_walk_data = query.normalize_list_dicts_to_dataframe_rows(cleaned_walk_data, ["gait_walk_features"])
@@ -150,14 +151,18 @@ def main():
                                 source_table_id = [values["synId"] for key, values in data_dict.items()],
                                 output_filename = "walking_gait_features.csv",
                                 data_parent_id  = "syn21537420") 
-    print("################################## Saved Walking Data ######################################") 
+    print("\n################################## Saved Walking Data ######################################\n") 
+    
+
+    new_records = data[["recordId"]].drop_duplicates(keep = "first").reset_index(drop = True)
+    processed_records = pd.concat([processed_records, new_records]).reset_index(drop = True)
 
     query.save_data_to_synapse(syn = syn,
-                                data = cleaned_walk_data[["recordId"]].drop_duplicates(keep = "first").reset_index(drop = True),
+                                data = processed_records,
                                 source_table_id = [values["synId"] for key, values in data_dict.items()],
                                 output_filename = "processed_records.csv",
                                 data_parent_id  = "syn21537420")
-    print("################################## Saved Processed RecordIds Logging ###################################") 
+    print("\n################################## Saved Processed RecordIds Logging ########################\n") 
     
 
 if __name__ ==  '__main__': 
