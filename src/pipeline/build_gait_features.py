@@ -46,7 +46,7 @@ def read_args():
     return args
 
 
-def concat_mpower_columns(values):
+def standardize_mpower_data(values):
     """
     Helper function for concatenating several synapse table columns into standardized name
     with annotation of which test it conducts, and the synapse table entity is it
@@ -106,7 +106,7 @@ def main():
     gaitfeatures = gf_utils.GaitFeaturize()
     syn = sc.login()
     args = read_args() 
-    data = pd.concat([concat_mpower_datasets(values) for key, 
+    data = pd.concat([standardize_mpower_data(values) for key, 
                       values in data_dict.items()]).reset_index(drop = True)
     
     prev_stored_rotation_data = pd.DataFrame()
@@ -141,7 +141,7 @@ def main():
     cleaned_rotation_data = pd.concat([prev_stored_rotation_data, cleaned_rotation_data]).reset_index(drop = True)
 
     query.save_data_to_synapse(syn = syn, 
-                            data = cleaned_rotation_data[features], 
+                            data = cleaned_rotation_data, 
                             source_table_id =  [values["synId"] for key, values in data_dict.items()],
                             output_filename = "rotation_gait_features.csv",
                             data_parent_id = "syn21537420")
@@ -152,11 +152,11 @@ def main():
     # cleaned_walk_data = query.normalize_list_dicts_to_dataframe_rows(cleaned_walk_data, ["gait_walk_features"])
     # walking_feature = [feat for feat in cleaned_walk_data.columns if ("walking" in feat) and ("pathfile" not in feat)]
     # features = metadata_feature + walking_feature
-    cleaned_rotation_data = clean_feature_sets(data, "gait_walk_features")
+    cleaned_walk_data = clean_feature_sets(data, "gait_walk_features")
     cleaned_walk_data = pd.concat([prev_stored_walk_data, cleaned_walk_data]).reset_index(drop = True)
 
     query.save_data_to_synapse(syn = syn, 
-                                data = cleaned_walk_data[features], 
+                                data = cleaned_walk_data, 
                                 source_table_id = [values["synId"] for key, values in data_dict.items()],
                                 output_filename = "walking_gait_features.csv",
                                 data_parent_id  = "syn21537420") 
