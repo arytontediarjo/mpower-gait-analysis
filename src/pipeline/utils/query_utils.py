@@ -71,7 +71,7 @@ def get_walking_synapse_table(syn,
     else:
         raise Exception("version type is not recgonized, \
                         please use either of these choices:\
-                        (MPOWER_V1, MS_ACTIVE, MPOWER_V2, PASSIVE)")
+                        (MPOWER_V1, MS_ACTIVE, MPOWER_V2, MPOWER_PASSIVE)")
     
     ## download columns that contains walking data based on the logical condition
     file_map = syn.downloadTableColumns(query, column_list)
