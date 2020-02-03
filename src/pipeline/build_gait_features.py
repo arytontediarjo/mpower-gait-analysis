@@ -27,6 +27,10 @@ data_dict["GAIT_MPOWER_PASSIVE_TABLE"] = {"synId": "syn17022539",
                                           "table_version": "MPOWER_PASSIVE"}
 data_dict["GAIT_EMS_TABLE"]            = {"synId": "syn10278766", 
                                           "table_version": "ELEVATE_MS"}
+data_dict["OUTPUT"]                    =  {"rotation_data"           : "rotation_gait_features.csv",
+                                            "walk_data"              : "walk_gait_features.csv",
+                                            "processed_records"      : "processed_records.csv",
+                                            "parent_folder_synId"    : "syn21537420"}
 
 syn = sc.login()
 
@@ -109,6 +113,7 @@ def main():
     data = pd.concat([standardize_mpower_data(values) for key, 
                       values in data_dict.items()]).reset_index(drop = True)
     
+    ## instantiate empty dataframes ## 
     prev_stored_rotation_data = pd.DataFrame()
     prev_stored_walk_data     = pd.DataFrame()
     processed_records         = pd.DataFrame()
@@ -116,14 +121,14 @@ def main():
     if args.update:
         print("\n#########  UPDATING DATA  ################\n")
         processed_records         = query.check_children(syn = syn,
-                                                        data_parent_id = "syn21537420", 
-                                                        filename = "processed_records.csv")
+                                                        data_parent_id = data_dict["OUTPUT"]["parent_folder_synId"], 
+                                                        filename = data_dict["OUTPUT"]["processed_records"])
         prev_stored_rotation_data = query.check_children(syn = syn, 
-                                                        data_parent_id = "syn21537420", 
-                                                        filename = "rotational_gait_features.csv")
+                                                        data_parent_id = data_dict["OUTPUT"]["parent_folder_synId"], 
+                                                        filename = data_dict["OUTPUT"]["rotation_data"])
         prev_stored_walk_data     = query.check_children(syn = syn, 
-                                                        data_parent_id = "syn21537420",
-                                                        filename = "nonrotational_gait_features.csv")
+                                                        data_parent_id = data_dict["OUTPUT"]["parent_folder_synId"],
+                                                        filename = data_dict["OUTPUT"]["walk_data"])
         data = data[~data["recordId"].isin(processed_records["recordId"].unique())]
         print("new rows that will be stored: {}".format(data.shape[0]))
     print("dataset combined, total rows for processing job are %s" %data.shape[0])
@@ -132,46 +137,39 @@ def main():
     data = query.parallel_func_apply(data, gaitfeatures.featurize_wrapper, 
                                     int(args.cores), int(args.partition)) 
     
-    
-    # cleaned_rotation_data = data[data["gait_rotation_features"] != "#ERROR"].drop(["gait_walk_features"], axis = 1)
-    # cleaned_rotation_data = query.normalize_list_dicts_to_dataframe_rows(cleaned_rotation_data, ["gait_rotation_features"])
-    # rotation_feature = [feat for feat in cleaned_rotation_data.columns if ("rotation" in feat) and ("pathfile" not in feat)]
-    # features = metadata_feature + rotation_feature
+    ## clean rotation data ##
     cleaned_rotation_data = clean_feature_sets(data, "gait_rotation_features")
     cleaned_rotation_data = pd.concat([prev_stored_rotation_data, cleaned_rotation_data]).reset_index(drop = True)
 
     query.save_data_to_synapse(syn = syn, 
                             data = cleaned_rotation_data, 
                             source_table_id =  [values["synId"] for key, values in data_dict.items()],
-                            output_filename = "rotation_gait_features.csv",
-                            data_parent_id = "syn21537420")
+                            output_filename = data_dict["OUTPUT"]["rotation_data"],
+                            data_parent_id = data_dict["OUTPUT"]["parent_folder_synId"])
     
     print("\n################################## Saved Rotation Data ######################################\n")
     
-    # cleaned_walk_data = data[data["gait_walk_features"] != "#ERROR"].drop(["gait_rotation_features"], axis = 1)
-    # cleaned_walk_data = query.normalize_list_dicts_to_dataframe_rows(cleaned_walk_data, ["gait_walk_features"])
-    # walking_feature = [feat for feat in cleaned_walk_data.columns if ("walking" in feat) and ("pathfile" not in feat)]
-    # features = metadata_feature + walking_feature
+    ## clean walking data ##
     cleaned_walk_data = clean_feature_sets(data, "gait_walk_features")
     cleaned_walk_data = pd.concat([prev_stored_walk_data, cleaned_walk_data]).reset_index(drop = True)
 
     query.save_data_to_synapse(syn = syn, 
                                 data = cleaned_walk_data, 
                                 source_table_id = [values["synId"] for key, values in data_dict.items()],
-                                output_filename = "walking_gait_features.csv",
-                                data_parent_id  = "syn21537420") 
+                                output_filename = data_dict["OUTPUT"]["walk_data"],
+                                data_parent_id  = data_dict["OUTPUT"]["parent_folder_synId"]) 
     
     print("\n################################## Saved Walking Data ######################################\n") 
     
-
+    ## update processed records ##
     new_records = data[["recordId"]].drop_duplicates(keep = "first").reset_index(drop = True)
     processed_records = pd.concat([processed_records, new_records]).reset_index(drop = True)
 
     query.save_data_to_synapse(syn = syn,
                                 data = processed_records,
                                 source_table_id = [values["synId"] for key, values in data_dict.items()],
-                                output_filename = "processed_records.csv",
-                                data_parent_id  = "syn21537420")
+                                output_filename = data_dict["OUTPUT"]["processed_records"],
+                                data_parent_id  = data_dict["OUTPUT"]["parent_folder_synId"])
     
     print("\n################################## Saved Processed RecordIds Logging ########################\n") 
     
