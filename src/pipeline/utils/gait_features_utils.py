@@ -586,8 +586,8 @@ class GaitFeaturize:
         Returns:
             returns a list of json file featurized walking data on features column
         """
-        data["gait_walk_features"] = data["gait.json_pathfile"].apply(self.gait_feature_pipeline)
-        data["gait_rotation_features"] = data["gait.json_pathfile"].apply(self.rotation_feature_pipeline)
+        data["gait_walk_features"] = data["gait_json_pathfile"].apply(self.gait_feature_pipeline)
+        data["gait_rotation_features"] = data["gait_json_pathfile"].apply(self.rotation_feature_pipeline)
         return data
 
 

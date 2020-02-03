@@ -133,8 +133,7 @@ def main():
 
     query.save_data_to_synapse(syn = syn, 
                             data = cleaned_rotation_data[features], 
-                            source_table_id =  [GAIT_EMS_TABLE, GAIT_MPOWER_V1_TABLE, 
-                                                GAIT_MPOWER_V2_TABLE, GAIT_MPOWER_PASSIVE_TABLE],
+                            source_table_id =  [values["synId"] for key, values in data_dict.items()],
                             output_filename = "rotation_gait_features.csv",
                             data_parent_id = "syn21537420")
     print("################################## Saved Rotation Data ######################################")
@@ -148,16 +147,14 @@ def main():
 
     query.save_data_to_synapse(syn = syn, 
                                 data = cleaned_walk_data[features], 
-                                source_table_id = [GAIT_EMS_TABLE, GAIT_MPOWER_V1_TABLE, 
-                                                    GAIT_MPOWER_V2_TABLE, GAIT_MPOWER_PASSIVE_TABLE],
+                                source_table_id = [values["synId"] for key, values in data_dict.items()],
                                 output_filename = "walking_gait_features.csv",
                                 data_parent_id  = "syn21537420") 
     print("################################## Saved Walking Data ######################################") 
 
     query.save_data_to_synapse(syn = syn,
                                 data = cleaned_walk_data[["recordId"]].drop_duplicates(keep = "first").reset_index(drop = True),
-                                source_table_id = [GAIT_EMS_TABLE, GAIT_MPOWER_V1_TABLE, 
-                                                    GAIT_MPOWER_V2_TABLE, GAIT_MPOWER_PASSIVE_TABLE],
+                                source_table_id = [values["synId"] for key, values in data_dict.items()],
                                 output_filename = "processed_records.csv",
                                 data_parent_id  = "syn21537420")
     print("################################## Saved Processed RecordIds Logging ###################################") 
