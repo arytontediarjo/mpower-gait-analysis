@@ -1,3 +1,10 @@
+"""
+A pipeline script for extracting all the gait data from 
+Sage Bionetworks Synapse Table (MPowerV1, MPowerV2, MPower Passive, Elevate MS),
+featurize data based on rotational features and features from PDKit (external source). 
+Result of this data pipeline will all be saved as Synapse File Entity.
+"""
+
 ## import future function ##
 from __future__ import print_function
 from __future__ import unicode_literals
@@ -31,8 +38,6 @@ data_dict["OUTPUT"]                    =  {"rotation_data"           : "rotation
                                             "walk_data"              : "walk_gait_features.csv",
                                             "processed_records"      : "processed_records.csv",
                                             "parent_folder_synId"    : "syn21537420"}
-
-syn = sc.login()
 
 def read_args():
     """
