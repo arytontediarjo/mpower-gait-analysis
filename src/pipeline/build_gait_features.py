@@ -71,6 +71,7 @@ def standardize_mpower_data(values):
         and metadata columns
     """
     
+    print(values)
     table_id = values["synId"]
     table_version = values["table_version"]
     
@@ -86,10 +87,8 @@ def standardize_mpower_data(values):
     for filepath in filepath_cols:
         data_dict[filepath] = data[(metadata + [filepath])]
         if (("rest" not in filepath) and ("balance" not in filepath)):
-            print("walk: %s" %filepath)
             data_dict[filepath]["test_type"] = "walking"
         else:
-            print("balance: %s" %filepath)
             data_dict[filepath]["test_type"] = "balance"
         data_dict[filepath].columns = ["gait_json_pathfile" if ((cols not in metadata) and (cols != "test_type"))\
                                        else cols for cols in data_dict[filepath].columns]
@@ -111,7 +110,7 @@ def main():
     syn = sc.login()
     args = read_args() 
     data = pd.concat([standardize_mpower_data(values) for key, 
-                      values in data_dict.items()]).reset_index(drop = True)
+                      values in data_dict.items() if key != "OUTPUT"]).reset_index(drop = True).head(50)
     
     ## instantiate empty dataframes ## 
     prev_stored_rotation_data = pd.DataFrame()
@@ -143,7 +142,7 @@ def main():
 
     query.save_data_to_synapse(syn = syn, 
                             data = cleaned_rotation_data, 
-                            source_table_id =  [values["synId"] for key, values in data_dict.items()],
+                            source_table_id =  [values["synId"] for key, values in data_dict.items() if key != "OUTPUT"],
                             output_filename = data_dict["OUTPUT"]["rotation_data"],
                             data_parent_id = data_dict["OUTPUT"]["parent_folder_synId"])
     
@@ -155,7 +154,7 @@ def main():
 
     query.save_data_to_synapse(syn = syn, 
                                 data = cleaned_walk_data, 
-                                source_table_id = [values["synId"] for key, values in data_dict.items()],
+                                source_table_id = [values["synId"] for key, values in data_dict.items() if key != "OUTPUT"],
                                 output_filename = data_dict["OUTPUT"]["walk_data"],
                                 data_parent_id  = data_dict["OUTPUT"]["parent_folder_synId"]) 
     
@@ -167,7 +166,7 @@ def main():
 
     query.save_data_to_synapse(syn = syn,
                                 data = processed_records,
-                                source_table_id = [values["synId"] for key, values in data_dict.items()],
+                                source_table_id = [values["synId"] for key, values in data_dict.items() if key != "OUTPUT"],
                                 output_filename = data_dict["OUTPUT"]["processed_records"],
                                 data_parent_id  = data_dict["OUTPUT"]["parent_folder_synId"])
     
