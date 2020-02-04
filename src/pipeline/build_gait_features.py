@@ -70,8 +70,6 @@ def standardize_mpower_data(values):
         Concattenated and cleaned dataset with filepaths to .synaseCache columns (gait_json_pathfile), 
         and metadata columns
     """
-    
-    print(values)
     table_id = values["synId"]
     table_version = values["table_version"]
     
@@ -97,6 +95,19 @@ def standardize_mpower_data(values):
     return concat_data  
 
 def clean_feature_sets(data, target_feature):
+    """
+    Utility function to clean unused features, 
+    normalize list of json inside a column,
+    and remove error entries (empty filepaths, empty dataframe, no rotation data) 
+    from the dataframe
+    
+    Args:
+      data (pd.DataFrame)    : dataframe of concattenated data
+      target_feature (string): name of column of the pathfile to the .synapseCache 
+    Return:
+      RType: pd.DataFrame
+      Returns a dataframe with normalized columns and metadata
+    """
     metadata_feature = ['recordId', 'healthCode','appVersion', 
                         'phoneInfo', 'createdOn', 'test_type', 
                         "table_version"]
