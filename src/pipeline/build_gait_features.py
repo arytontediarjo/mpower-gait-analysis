@@ -137,7 +137,7 @@ def clean_feature_sets(data, target_feature):
 def main():
     args = read_args() 
     data = pd.concat([standardize_mpower_data(values) for key, 
-                      values in data_dict.items()]).reset_index(drop = True)
+                      values in data_dict.items() if key != "OUTPUT"]).reset_index(drop = True)
     
     ## instantiate empty dataframes ## 
     prev_stored_data     = pd.DataFrame()
