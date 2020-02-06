@@ -62,7 +62,7 @@ def featurize_wrapper(data):
         returns a json file featurized walking data
         """
         gaitfeatures = gf_utils.GaitFeaturize()
-        data["gait_features"] = data["gait_json_filepath"].apply(gaitfeatures.run_pipeline)
+        data["gait_features"] = data["gait_json_filepath"].apply(gaitfeatures.run_gait_feature_pipeline)
         return data
 
 

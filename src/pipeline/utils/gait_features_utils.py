@@ -54,10 +54,10 @@ class GaitFeaturize:
         sampling_frequency (dtype: float, int)    : Samples collected per seconds
 
     HOW-TO-USE:
-        import gait_features_utils
-        sensor_data = (options of pd.DataFrame or string filepath)
+        import utils.gait_features_utils
+        sensor_data =  (options of pd.DataFrame or string filepath) 
         gf          =  gait_features_utils.GaitFeaturize()
-        features    =  gf.run_pipeline(sensor_data)
+        features    =  gf.run_gait_feature_pipeline(sensor_data)
 
     """
     
@@ -87,7 +87,7 @@ class GaitFeaturize:
         self.loco_band                   = loco_band
         self.freeze_band                 = freeze_band
         self.sampling_frequency          = sampling_frequency
-        self.gait_processor              = pdkit.processor.Processor(sampling_frequency = self.sampling_frequency)
+        
 
 
     def get_sensor_data(self, data, sensor): 
@@ -147,14 +147,15 @@ class GaitFeaturize:
         if data.shape[0] == 0:
             return "#ERROR: SENSOR NOT AVAILABLE"
         
-        ## format dataframe to desired format
+        ## format dataframe to desired pdkit format ##
         return self.format_time_series_data(data)
-    
+
+        
 
     def format_time_series_data(self, data):
         """
         Utility function to clean accelerometer data to PDKIT format
-        Format => [time(DatetimeIndex), x, y, z , AA, td]
+        Format => [timestamp (DatetimeIndex), x, y, z , AA, td]
 
         time (dtype: DatetimeIndex) : An index of time in seconds
         x  (dtype: float64) : sensor-values in x axis
@@ -175,10 +176,17 @@ class GaitFeaturize:
         data = data.dropna(subset = ["x", "y", "z"])
         date_series = pd.to_datetime(data["timestamp"], unit = "s")
         data["td"] = (date_series - date_series.iloc[0]).apply(lambda x: x.total_seconds())
-        data["time"] = data["td"]
-        data = data.set_index("time")
+        data["timestamp"] = data["td"]
+        data = data.set_index("timestamp")
         data.index = pd.to_datetime(data.index, unit = "s")
         data["AA"] = np.sqrt(data["x"]**2 + data["y"]**2 + data["z"]**2)
+
+        ## some sanity checking ##
+        
+        ## remove data duplicates ##
+        data = data[~data.index.duplicated(keep='first')]
+
+        ## sort all indexes ## 
         data = data.sort_index()
         return data[["td","x","y","z","AA"]] 
 
@@ -190,7 +198,6 @@ class GaitFeaturize:
         Args: 
             accel_series (dtype = pd.Series): pd.Series of acceleration signal in one axis
             sample_rate  (dtype = float64)  : signal sampling rate
-
         Returns:
             RType: List
             List containing 2 values of freeze index values [energy of freeze index, locomotor freeze index]
@@ -236,10 +243,10 @@ class GaitFeaturize:
 
         ## check if dataframe is valid ## 
         if not isinstance(gyro_dataframe, pd.DataFrame):
-            raise Exception("Please parse pandas dataframe into the parameter")
+            raise Exception("PIPELINE ERROR: PLEASE PARSE PANDAS DATAFRAME")
 
         if gyro_dataframe.shape[0] == 0:
-            raise Exception("Dataframe is empty")
+            raise Exception("PIPELINE ERROR: DATAFRAME IS EMPTY")
 
         gyro_dataframe[axis] = butter_lowpass_filter(data        = gyro_dataframe[axis],
                                                     sample_rate  = self.sampling_frequency,
@@ -288,13 +295,13 @@ class GaitFeaturize:
 
         ## check if dataframe is valid ##
         if not isinstance(accel_dataframe, pd.DataFrame):
-            raise Exception("Please parse pandas dataframe into the parameter")
+            raise Exception("PIPELINE ERROR: PLEASE PARSE PANDAS DATAFRAME")
 
         if accel_dataframe.shape[0] == 0:
-            raise Exception("Dataframe is empty")
+            raise Exception("PIPELINE ERROR: DATAFRAME IS EMPTY")
 
         ## instantiate initial values ## 
-        chunk_list          = []
+        chunk_list          =  []
         pointer             =  0 
         num_rotation_window =  1
         num_walk_window     =  1
@@ -353,10 +360,11 @@ class GaitFeaturize:
             Return format:
                 [{window1_features:...}, {window2_features:...}, {window3_features:...}]
         """
+        
         feature_list = []
         num_window = 1
+        
         ## separate to rotation and non rotation ## 
-
         for dataframe_dict in list_of_dataframe_dicts:
             window_size     = self.window_size
             step_size       = self.step_size
@@ -372,7 +380,7 @@ class GaitFeaturize:
                 isRotation = False
                 rotation_omega = np.NaN
             if (len(curr_dataframe) < jPos) or isRotation:
-                feature_dict = self.gait_featurize(curr_dataframe)
+                feature_dict = self.get_pdkit_gait_features(curr_dataframe)
                 feature_dict["rotation_omega"] = rotation_omega
                 feature_dict["window"]         = "window_%s"%num_window
                 feature_list.append(feature_dict)
@@ -381,7 +389,7 @@ class GaitFeaturize:
                 while jPos < len(curr_dataframe):
                     jStart     = jPos - window_size
                     subset     = curr_dataframe.iloc[jStart:jPos]
-                    feature_dict = self.gait_featurize(subset)
+                    feature_dict = self.get_pdkit_gait_features(subset)
                     feature_dict["rotation_omega"] = rotation_omega
                     feature_dict["window"]         = "window_%s"%num_window
                     feature_list.append(feature_dict)
@@ -390,7 +398,7 @@ class GaitFeaturize:
         return feature_list
 
 
-    def gait_featurize(self, accel_dataframe):
+    def get_pdkit_gait_features(self, accel_dataframe):
         """
         Function to featurize dataframe using pdkit package (gait).
         Features from pdkit contains the following (can be added with more things for future improvement):
@@ -416,10 +424,10 @@ class GaitFeaturize:
 
         ## check if dataframe is valid ##
         if not isinstance(accel_dataframe, pd.DataFrame):
-            raise Exception("#ERROR: PLEASE PARSE PANDAS DATAFRAME INTO PARAMETER")
+            raise Exception("PIPELINE ERROR: PLEASE PARSE PANDAS DATAFRAME INTO PARAMETER")
 
         if accel_dataframe.shape[0] == 0:
-            raise Exception("#ERROR: DATAFRAME IS EMPTY")
+            raise Exception("PIPELINE ERROR: DATAFRAME IS EMPTY")
 
         window_start = accel_dataframe.td[0]
         window_end = accel_dataframe.td[-1]
@@ -536,16 +544,27 @@ class GaitFeaturize:
         return df_resampled
 
 
-    def run_pipeline(self, data):
+    def run_gait_feature_pipeline(self, data):
+        """
+        main entry point of this featurizaton class, parameter will take in pd.DataFrame or the filepath to the dataframe.
+
+        Args:
+            data (dtype: dataframe or string filepath): contains dataframe (or filepath to the dataframe) 
+                                                        that contains at least columns of [timestamp, x, y, z]
+                                                        of gyroscope and user acceleration data
+        Returns:
+            A list of dictionary. With each dictionary representing gait features on one window.
+        """
+
         accel_data    = self.get_sensor_data(data, "userAcceleration")
         rotation_data = self.get_sensor_data(data, "rotationRate")        
         
-        ## check if time series is of type dataframe                       
+        ## Check if time series is of type dataframe and not an empty dataframe                     
         if not ((isinstance(rotation_data, pd.DataFrame) and isinstance(accel_data, pd.DataFrame))):
             return "#ERROR: EMPTY FILEPATH"
         if not ((rotation_data.shape[0] != 0 and (accel_data.shape[0] != 0))):
             return "#ERROR: EMPTY DATAFRAME"
-        
+
         resampled_rotation         = self.resample_signal(rotation_data)
         resampled_accel            = self.resample_signal(accel_data)
         rotation_dict              = self.get_gait_rotation_info(resampled_rotation)
