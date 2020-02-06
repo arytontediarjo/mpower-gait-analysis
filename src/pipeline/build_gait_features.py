@@ -1,3 +1,10 @@
+"""
+A pipeline script for extracting all the gait data from 
+Sage Bionetworks Synapse Table (MPowerV1, MPowerV2, MPower Passive, Elevate MS),
+featurize data based on rotational features and features from PDKit (external source). 
+Result of this data pipeline will all be saved as Synapse File Entity.
+"""
+
 ## import future function ##
 from __future__ import print_function
 from __future__ import unicode_literals
@@ -16,6 +23,7 @@ import synapseclient as sc
 from utils import query_utils as query
 from utils import gait_features_utils as gf_utils
 
+syn = sc.login()
 
 ## GLOBAL VARIABLES ## 
 data_dict = {}
@@ -31,8 +39,6 @@ data_dict["OUTPUT"]                    =  {"rotation_data"           : "rotation
                                             "walk_data"              : "walk_gait_features.csv",
                                             "processed_records"      : "processed_records.csv",
                                             "parent_folder_synId"    : "syn21537420"}
-
-syn = sc.login()
 
 def read_args():
     """
@@ -81,7 +87,6 @@ def standardize_mpower_data(values):
         Concattenated and cleaned dataset with filepaths to .synaseCache columns (gait_json_pathfile), 
         and metadata columns
     """
-    
     table_id = values["synId"]
     table_version = values["table_version"]
     
@@ -109,6 +114,19 @@ def standardize_mpower_data(values):
     return concat_data  
 
 def clean_feature_sets(data, target_feature):
+    """
+    Utility function to clean unused features, 
+    normalize list of json inside a column,
+    and remove error entries (empty filepaths, empty dataframe, no rotation data) 
+    from the dataframe
+    
+    Args:
+      data (pd.DataFrame)    : dataframe of concattenated data
+      target_feature (string): name of column of the pathfile to the .synapseCache 
+    Return:
+      RType: pd.DataFrame
+      Returns a dataframe with normalized columns and metadata
+    """
     metadata_feature = ['recordId', 'healthCode','appVersion', 
                         'phoneInfo', 'createdOn', 'test_type', 
                         "table_version"]
@@ -118,8 +136,6 @@ def clean_feature_sets(data, target_feature):
     return data
     
 def main():
-    gaitfeatures = gf_utils.GaitFeaturize()
-    syn = sc.login()
     args = read_args() 
     data = pd.concat([standardize_mpower_data(values) for key, 
                       values in data_dict.items()]).reset_index(drop = True)
