@@ -49,6 +49,17 @@ def read_args():
     args = parser.parse_args()
     return args
 
+def featurize_wrapper(data):
+        """
+        wrapper function for multiprocessing jobs (walking/balance)
+        Args:
+            data (type: pd.DataFrame): takes in pd.DataFrame
+        returns a json file featurized walking data
+        """
+        gaitfeatures = gf_utils.GaitFeaturize()
+        data["gait_features"] = data["gait_json_filepath"].apply(gaitfeatures.run_pipeline_using_filepath)
+        return data
+
 
 def standardize_mpower_data(values):
     """
@@ -71,7 +82,6 @@ def standardize_mpower_data(values):
         and metadata columns
     """
     
-    print(values)
     table_id = values["synId"]
     table_version = values["table_version"]
     
@@ -87,10 +97,12 @@ def standardize_mpower_data(values):
     for filepath in filepath_cols:
         data_dict[filepath] = data[(metadata + [filepath])]
         if (("rest" not in filepath) and ("balance" not in filepath)):
+            print("walk: %s" %filepath)
             data_dict[filepath]["test_type"] = "walking"
         else:
+            print("balance: %s" %filepath)
             data_dict[filepath]["test_type"] = "balance"
-        data_dict[filepath].columns = ["gait_json_pathfile" if ((cols not in metadata) and (cols != "test_type"))\
+        data_dict[filepath].columns = ["gait_json_filepath" if ((cols not in metadata) and (cols != "test_type"))\
                                        else cols for cols in data_dict[filepath].columns]
     concat_data = pd.concat([values for key, values in data_dict.items()]).reset_index(drop = True)
     concat_data["table_version"] = table_version
@@ -110,7 +122,7 @@ def main():
     syn = sc.login()
     args = read_args() 
     data = pd.concat([standardize_mpower_data(values) for key, 
-                      values in data_dict.items() if key != "OUTPUT"]).reset_index(drop = True).head(50)
+                      values in data_dict.items()]).reset_index(drop = True)
     
     ## instantiate empty dataframes ## 
     prev_stored_rotation_data = pd.DataFrame()
@@ -133,8 +145,7 @@ def main():
     print("dataset combined, total rows for processing job are %s" %data.shape[0])
 
     ## featurize data ##
-    data = query.parallel_func_apply(data, gaitfeatures.featurize_wrapper, 
-                                    int(args.cores), int(args.partition)) 
+    data = query.parallel_func_apply(data, featurize_wrapper, int(args.cores), int(args.partition)) 
     
     ## clean rotation data ##
     cleaned_rotation_data = clean_feature_sets(data, "gait_rotation_features")
@@ -142,7 +153,7 @@ def main():
 
     query.save_data_to_synapse(syn = syn, 
                             data = cleaned_rotation_data, 
-                            source_table_id =  [values["synId"] for key, values in data_dict.items() if key != "OUTPUT"],
+                            source_table_id =  [values["synId"] for key, values in data_dict.items()],
                             output_filename = data_dict["OUTPUT"]["rotation_data"],
                             data_parent_id = data_dict["OUTPUT"]["parent_folder_synId"])
     
@@ -154,7 +165,7 @@ def main():
 
     query.save_data_to_synapse(syn = syn, 
                                 data = cleaned_walk_data, 
-                                source_table_id = [values["synId"] for key, values in data_dict.items() if key != "OUTPUT"],
+                                source_table_id = [values["synId"] for key, values in data_dict.items()],
                                 output_filename = data_dict["OUTPUT"]["walk_data"],
                                 data_parent_id  = data_dict["OUTPUT"]["parent_folder_synId"]) 
     
@@ -166,7 +177,7 @@ def main():
 
     query.save_data_to_synapse(syn = syn,
                                 data = processed_records,
-                                source_table_id = [values["synId"] for key, values in data_dict.items() if key != "OUTPUT"],
+                                source_table_id = [values["synId"] for key, values in data_dict.items()],
                                 output_filename = data_dict["OUTPUT"]["processed_records"],
                                 data_parent_id  = data_dict["OUTPUT"]["parent_folder_synId"])
     
