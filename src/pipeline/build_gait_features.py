@@ -130,7 +130,7 @@ def clean_feature_sets(data, target_feature):
                         'phoneInfo', 'createdOn', 'test_type', 
                         "table_version"]
     feature_cols = metadata_feature + [target_feature]
-    data = data[~data[target_feature].apply(lambda x: isinstance(x, list))][feature_cols]
+    data = data[data[target_feature].apply(lambda x: isinstance(x, list))][feature_cols]
     data = query.normalize_list_dicts_to_dataframe_rows(data, [target_feature])
     return data
     
