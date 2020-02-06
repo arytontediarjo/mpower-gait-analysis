@@ -130,8 +130,7 @@ def clean_feature_sets(data, target_feature):
                         'phoneInfo', 'createdOn', 'test_type', 
                         "table_version"]
     feature_cols = metadata_feature + [target_feature]
-    data = data[(data[target_feature] != "#EMPTY FILEPATH") &
-                (data[target_feature] != "#EMPTY DATAFRAME")][feature_cols]
+    data = data[~data[target_feature].str.contains("#ERROR")][feature_cols]
     data = query.normalize_list_dicts_to_dataframe_rows(data, [target_feature])
     return data
     
@@ -165,23 +164,12 @@ def main():
 
     query.save_data_to_synapse(syn = syn, 
                             data = cleaned_data, 
-                            source_table_id =  [values["synId"] for key, values in data_dict.items()],
+                            source_table_id =  [values["synId"] for key, values in data_dict.items() if key != "OUTPUT"],
                             output_filename = data_dict["OUTPUT"]["data"],
                             data_parent_id = data_dict["OUTPUT"]["parent_folder_synId"])
     
     print("\n################################## Saved Gait Data ######################################\n")
     
-    # ## clean walking data ##
-    # cleaned_walk_data = clean_feature_sets(data, "gait_walk_features")
-    # cleaned_walk_data = pd.concat([prev_stored_walk_data, cleaned_walk_data]).reset_index(drop = True)
-
-    # query.save_data_to_synapse(syn = syn, 
-    #                             data = cleaned_walk_data, 
-    #                             source_table_id = [values["synId"] for key, values in data_dict.items()],
-    #                             output_filename = data_dict["OUTPUT"]["walk_data"],
-    #                             data_parent_id  = data_dict["OUTPUT"]["parent_folder_synId"]) 
-    
-    # print("\n################################## Saved Walking Data ######################################\n") 
     
     ## update processed records ##
     new_records = data[["recordId"]].drop_duplicates(keep = "first").reset_index(drop = True)
@@ -189,7 +177,7 @@ def main():
 
     query.save_data_to_synapse(syn = syn,
                                 data = processed_records,
-                                source_table_id = [values["synId"] for key, values in data_dict.items()],
+                                source_table_id = [values["synId"] for key, values in data_dict.items() if key != "OUTPUT"],
                                 output_filename = data_dict["OUTPUT"]["processed_records"],
                                 data_parent_id  = data_dict["OUTPUT"]["parent_folder_synId"])
     
