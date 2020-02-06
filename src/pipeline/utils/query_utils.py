@@ -98,7 +98,7 @@ def get_walking_synapse_table(syn,
                                     "file_path": "{}_pathfile".format(feat)})\
                                         .drop(["file_handle_id"], axis = 1)
     ## Empty Filepaths on synapseTable ##
-    data = data.fillna("#ERROR") 
+    data = data.fillna("#ERROR: EMPTY FILEPATH") 
     cols = [feat for feat in data.columns if "path_id" not in feat]
     return data[cols]
 

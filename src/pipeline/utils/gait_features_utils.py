@@ -1,4 +1,8 @@
-## future liibrary imports ## 
+"""
+Featurization Pipeline Class on Gait Signal Data
+"""
+
+# future liibrary imports ## 
 from __future__ import unicode_literals
 from __future__ import print_function
 
@@ -14,10 +18,48 @@ import pdkit
 import pdkit.processor 
 from pdkit.utils import (butter_lowpass_filter, 
                          numerical_integration)
-## library imports ##
-import utils.query_utils as query
 
 class GaitFeaturize:
+
+    """
+    This is the gait featurization package that combines features from pdkit package,
+    rotation detection algorithm from gyroscope, and gait pipeline with overlapped-moving window.
+    
+    References:
+        Rotation-Detection Paper : https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5811655/
+        PDKit Docs               : https://pdkit.readthedocs.io/_/downloads/en/latest/pdf/
+        PDKit Gait Source Codes  : https://github.com/pdkit/pdkit/blob/79d6127454f22f7ea352a2540c5b8364b21356e9/pdkit/gait_processor.py
+        Freeze of Gait Docs      : https://ieeexplore.ieee.org/document/5325884
+
+    Args:
+        gyro_frequency_cutoff (dtype: int, float) : frequency cutoff for gyroscope rotation rate
+        gyro_filter_order (dtype: float)          : signal filter order for gyroscope rotation rate
+        gyro_aucXt_upper_limit (dtype: int, float): upper limit of AUC during "zero crossing period", 
+                                                    an upper limit of above two indicates that user is 
+                                                    doing a turn/rotation movements (per Rotation Detection Paper)
+        accel_frequency_cutoff (dtype: int, float): Frequency cutoff on user acceleration (default = 5Hz)
+        accel_filter_order (dtype: int, float)    : Signal filter order on user acceleration (default = 4th Order)
+        accel_delta (dtype: int, float)           : A point is considered a maximum peak if it has the maximal value, 
+                                                    and was preceded (to the left) by a value lower by delta (0.5 default).
+        variance_cutoff (dtype: int, float)       : a cutoff of variance on signal data, 
+                                                    if data has too low of variance, 
+                                                    it will be considered as 
+                                                    not moving (0 steps on window)
+        window_size (dtype: int, float)           : window size of that dynamically spans 
+                                                    through the longitudinal data (default: 512 sample ~ around 5 seconds)
+        step_size (dtype: int, float)             : step size make from the previous 
+                                                    start point of the the window size (50 ~ around 0.5 seconds)
+        loco_band (dtype: list)                   : The ratio of the energy in the locomotion band, measured in Hz ([0.5, 3] default)
+        freeze_band (dtype: list)                 : The ration of energy in the freeze band, measured in Hz ([3, 8] default)
+        sampling_frequency (dtype: float, int)    : Samples collected per seconds
+
+    HOW-TO-USE:
+        import gait_features_utils
+        sensor_data = (options of pd.DataFrame or string filepath)
+        gf          =  gait_features_utils.GaitFeaturize()
+        features    =  gf.run_pipeline(sensor_data)
+
+    """
     
     def __init__(self, 
                 rotation_frequency_cutoff   = 2,
@@ -48,56 +90,148 @@ class GaitFeaturize:
         self.gait_processor              = pdkit.processor.Processor(sampling_frequency = self.sampling_frequency)
 
 
+    def get_sensor_data(self, data, sensor): 
+        """
+        Utility Function to get sensor data given a filepath.
+        Data extraction will be adjusted to several different
+        json formatting of its key-value pairs based on mPower Synapse Table        
+        
+        Args: 
+            data     (dtype: string, pd.DataFrame): string of filepath or pandas DataFrame
+            sensor   (dtype: string)              : the sensor type (userAcceleration, 
+                                                    acceleration with gravity, 
+                                                    gyroscope etc. from time series)
+        Returns:
+            Rtype: pd.DataFrame
+            Return a formatted version of the dataframe that contains an index of time-index dataframe (timestamp), 
+            and columns of time differences in seconds, and sensor measurement in x, y, z coordinate from the filepaths.
+            Errors will be annotated with its reason, and instantiated with "#ERROR:...."
+        """
+        ## if empty filepaths return it back ##
+        
+        if isinstance(data, str):
+            if data == "#ERROR: EMPTY FILEPATH":
+                return data
+        
+            ## open filepath ##
+            try:
+                with open(data) as f:
+                    json_data = f.read()
+                    data = pd.DataFrame(json.loads(json_data))
+            except:
+                return "#ERROR: FILE CANNOT BE PARSED TO DATAFRAME"
+
+        ## return accelerometer data back if empty ##
+        if data.shape[0] == 0: 
+            return "#ERROR: EMPTY DATAFRAME"
+        
+        ## retrieve data if sensor is stored as a long format ##
+        if ("sensorType" in data.columns):
+            try:
+                data = data[data["sensorType"] == sensor]
+            except:
+                return "#ERROR: SENSOR NOT AVAILABLE"
+        
+        ## retrieve data if sensor is stored as a wide format ##
+        else:
+            try:
+                data = data[["timestamp", sensor]]
+                data["x"] = data[sensor].apply(lambda x: x["x"])
+                data["y"] = data[sensor].apply(lambda x: x["y"])
+                data["z"] = data[sensor].apply(lambda x: x["z"])
+                data = data.drop([sensor], axis = 1)
+            except:
+                return "#ERROR: SENSOR NOT AVAILABLE"
+
+        ## if the shape of data is zero after transformation, return sensor not available ##
+        if data.shape[0] == 0:
+            return "#ERROR: SENSOR NOT AVAILABLE"
+        
+        ## format dataframe to desired format
+        return self.format_time_series_data(data)
+    
+
+    def format_time_series_data(self, data):
+        """
+        Utility function to clean accelerometer data to PDKIT format
+        Format => [time(DatetimeIndex), x, y, z , AA, td]
+
+        time (dtype: DatetimeIndex) : An index of time in seconds
+        x  (dtype: float64) : sensor-values in x axis
+        y  (dtype: float64) : sensor-values in y axis
+        z  (dtype: float64) : sensor-values in z axis
+        AA (dtype: float64) : resultant of sensor values
+        td (dtype: float64) : current time difference from zero in seconds
+
+        Args: 
+            data(type: pd.DataFrame): pandas dataframe of time series
+        
+        Returns:
+            RType: pd.DataFrame
+            Returns a formatted dataframe 
+        """
+        if data.shape[0] == 0:
+            raise Exception("#ERROR: EMPTY DATAFRAME")
+        data = data.dropna(subset = ["x", "y", "z"])
+        date_series = pd.to_datetime(data["timestamp"], unit = "s")
+        data["td"] = (date_series - date_series.iloc[0]).apply(lambda x: x.total_seconds())
+        data["time"] = data["td"]
+        data = data.set_index("time")
+        data.index = pd.to_datetime(data.index, unit = "s")
+        data["AA"] = np.sqrt(data["x"]**2 + data["y"]**2 + data["z"]**2)
+        data = data.sort_index()
+        return data[["td","x","y","z","AA"]] 
+
+
     def calculate_freeze_index(self, accel_series, sample_rate):
-            """
-            Modified pdkit FoG freeze index function to be compatible with 
-            current source dode
-            Args: 
-                accel_series (type = pd.Series): pd.Series of acceleration signal in one axis
-                sample_rate (type = float64)  : signal sampling rate
+        """
+        Modified pdkit FoG freeze index function to be compatible with 
+        current source dode
+        Args: 
+            accel_series (dtype = pd.Series): pd.Series of acceleration signal in one axis
+            sample_rate  (dtype = float64)  : signal sampling rate
 
-            Returns:
-                RType: array
-                array of [energy of freeze index , locomotor freeze index]
-            """
-            loco_band   = self.loco_band
-            freeze_band = self.freeze_band
-            window_size = accel_series.shape[0]
-            f_res       = sample_rate / window_size
-            f_nr_LBs    = int(loco_band[0] / f_res)
-            f_nr_LBe    = int(loco_band[1] / f_res)
-            f_nr_FBs    = int(freeze_band[0] / f_res)
-            f_nr_FBe    = int(freeze_band[1] / f_res)
+        Returns:
+            RType: List
+            List containing 2 values of freeze index values [energy of freeze index, locomotor freeze index]
+        """
+        loco_band   = self.loco_band
+        freeze_band = self.freeze_band
+        window_size = accel_series.shape[0]
+        f_res       = sample_rate / window_size
+        f_nr_LBs    = int(loco_band[0] / f_res)
+        f_nr_LBe    = int(loco_band[1] / f_res)
+        f_nr_FBs    = int(freeze_band[0] / f_res)
+        f_nr_FBe    = int(freeze_band[1] / f_res)
 
-            ## normalize series  ## 
-            normalized_accel_series = accel_series - np.mean(accel_series)
+        ## normalize series  ## 
+        normalized_accel_series = accel_series - np.mean(accel_series)
 
-            ## discrete fast fourier transform ##
-            Y = np.fft.fft(normalized_accel_series, int(window_size))
-            Pyy = abs(Y*Y) / window_size
-            areaLocoBand = numerical_integration( Pyy[f_nr_LBs-1 : f_nr_LBe],   sample_rate)
-            areaFreezeBand = numerical_integration( Pyy[f_nr_FBs-1 : f_nr_FBe], sample_rate)
-            sumLocoFreeze = areaFreezeBand + areaLocoBand
-            freezeIndex = areaFreezeBand / areaLocoBand
-            return freezeIndex, sumLocoFreeze
+        ## discrete fast fourier transform ##
+        Y = np.fft.fft(normalized_accel_series, int(window_size))
+        Pyy = abs(Y*Y) / window_size
+        areaLocoBand = numerical_integration( Pyy[f_nr_LBs-1 : f_nr_LBe],   sample_rate)
+        areaFreezeBand = numerical_integration( Pyy[f_nr_FBs-1 : f_nr_FBe], sample_rate)
+        sumLocoFreeze = areaFreezeBand + areaLocoBand
+        freezeIndex = areaFreezeBand / areaLocoBand
+        return freezeIndex, sumLocoFreeze
 
 
 
     def get_gait_rotation_info(self, gyro_dataframe, axis = "y"): 
         """
-        Function to outputs rotation information (omega, period of rotation) 
+        Function to output rotation information (omega, period of rotation) 
         in a dictionary format, given a gyroscope dataframe and its axis orientation
 
         Args:
-            gyro_dataframe (type: pd.DataFrame)               : A gyrosocope dataframe
-            axis           (type: str, default = "y")         : Axis of desired rotation orientation,
-                                                                default is y axis (pocket-test), 
-                                                                unless specified otherwise                                  
+            gyro_dataframe (type: pd.DataFrame)       : A gyrosocope dataframe
+            axis           (type: str, default = "y") : Axis of desired rotation orientation,
+                                                        default is y axis (pocket-test), 
+                                                        unless specified otherwise                                  
         Returns:
             RType: Dictionary
-
-        Return format {"rotation_chunk_1" : {omega: some_value, period: some_value},
-                        "rotation_chunk_2": {omega: some_value, period: some_value}}
+            Return format {"rotation_chunk_1" : {omega: some_value, period: some_value},
+                            "rotation_chunk_2": {omega: some_value, period: some_value}}
         """
 
         ## check if dataframe is valid ## 
@@ -135,8 +269,8 @@ class GaitFeaturize:
 
     def split_gait_dataframe_to_chunks(self, accel_dataframe, periods):
         """
-        Function to chunk dataframe into several segments of rotational and non-rotational sequences into List.
-        Each chunk in the list will be in dictionary format containing information of the dataframe 
+        Function to chunk dataframe into several periods of rotational and non-rotational sequences into List.
+        Each dataframe chunk in the list will be in dictionary format containing information of the dataframe itself
         and what type of chunk it categorizes as. 
 
         Args:
@@ -199,15 +333,14 @@ class GaitFeaturize:
 
     def featurize_gait_dataframe_chunks_by_window(self, list_of_dataframe_dicts, rotation_dict):
         """
-        Function to featurize list of dataframe chunks with moving windows,
-        and returns list of dictionary with all the pdkit and rotation features (all x, y, z, AA axis) 
-        from each moving window
+        Function to featurize list of rotation-segmented dataframe chunks with moving windows,
+        and returns list of dictionary with all the pdkit and rotation features from each moving window
         Notes:
           >> if dataframe chunk is smaller than the window size or is a rotation dataframe chunk
               it will just be treated as one window
-          >> if dataframe is bigger than designated window, then featurize dataframe residing
-             on that window, with designated step size
-
+          >> if dataframe is bigger than designated window, then a while loop of gait featurization
+             using moving window will occur
+    
         Args:
             list_of_dataframe_dicts (type = List): A List filled with dictionaries containing key-value pair of 
                                                     the dataframe and its chunk type
@@ -279,15 +412,14 @@ class GaitFeaturize:
         Returns:
             RType: Dictionary 
             Returns dictionary containing features computed from PDKit Package
-
         """
 
         ## check if dataframe is valid ##
         if not isinstance(accel_dataframe, pd.DataFrame):
-            raise Exception("Please parse pandas dataframe into the parameter")
+            raise Exception("#ERROR: PLEASE PARSE PANDAS DATAFRAME INTO PARAMETER")
 
         if accel_dataframe.shape[0] == 0:
-            raise Exception("Dataframe is empty")
+            raise Exception("#ERROR: DATAFRAME IS EMPTY")
 
         window_start = accel_dataframe.td[0]
         window_end = accel_dataframe.td[-1]
@@ -385,25 +517,39 @@ class GaitFeaturize:
         feature_dict["window_size"] = window_duration
         return feature_dict
 
+    
+    def resample_signal(self, dataframe):
+        """
+        Utility method for data resampling,
+        Data will be interpolated using linear method
+
+        Args: 
+            dataframe: A time-indexed dataframe
+        
+        Returns:
+            RType: pd.DataFrame
+            Returns a resampled dataframe based on predefined sampling frequency on class instantiation
+        """
+        new_freq = np.round(1 / self.sampling_frequency, decimals=6)
+        df_resampled = dataframe.resample(str(new_freq) + 'S').mean()
+        df_resampled = df_resampled.interpolate(method='linear') 
+        return df_resampled
 
 
-    def run_pipeline_using_filepath(self, filepath):
-        accel_data = query.get_sensor_data_from_filepath(filepath, "userAcceleration")
-        rotation_data = query.get_sensor_data_from_filepath(filepath, "rotationRate")
-
+    def run_pipeline(self, data):
+        accel_data    = self.get_sensor_data(data, "userAcceleration")
+        rotation_data = self.get_sensor_data(data, "rotationRate")        
+        
         ## check if time series is of type dataframe                       
         if not ((isinstance(rotation_data, pd.DataFrame) and isinstance(accel_data, pd.DataFrame))):
-            return "#EMPTY FILEPATH"
+            return "#ERROR: EMPTY FILEPATH"
         if not ((rotation_data.shape[0] != 0 and (accel_data.shape[0] != 0))):
-            return "#EMPTY DATAFRAME"
-    
-        resampled_rotation = self.gait_processor.resample_signal(rotation_data)
-        resampled_accel    = self.gait_processor.resample_signal(accel_data)
+            return "#ERROR: EMPTY DATAFRAME"
         
-        rotation_dict = self.get_gait_rotation_info(resampled_rotation)
-        periods = [v["period"] for k,v in rotation_dict.items()]
-
-        list_df_chunks     = self.split_gait_dataframe_to_chunks(resampled_accel, periods)
-        feature_dictionary = self.featurize_gait_dataframe_chunks_by_window(list_df_chunks, rotation_dict)
-        
-        return feature_dictionary
+        resampled_rotation         = self.resample_signal(rotation_data)
+        resampled_accel            = self.resample_signal(accel_data)
+        rotation_dict              = self.get_gait_rotation_info(resampled_rotation)
+        periods                    = [v["period"] for k,v in rotation_dict.items()]
+        list_df_chunks             = self.split_gait_dataframe_to_chunks(resampled_accel, periods)
+        list_of_feature_dictionary = self.featurize_gait_dataframe_chunks_by_window(list_df_chunks, rotation_dict)
+        return list_of_feature_dictionary
