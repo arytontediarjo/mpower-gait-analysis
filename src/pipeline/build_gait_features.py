@@ -128,8 +128,8 @@ def create_feature_sets(data, target_feature):
                         'phoneInfo', 'createdOn', 'test_type', 
                         "table_version"]
     feature_cols = metadata_feature + [target_feature]
-    non_error_data  = data[data[target_feature].apply(lambda x: isinstance(x, list))][feature_cols]
-    feature_data    = query.normalize_list_dicts_to_dataframe_rows(non_error_data, [target_feature])
+    nonerror_data  = data[data[target_feature].apply(lambda x: isinstance(x, list))][feature_cols]
+    feature_data    = query.normalize_list_dicts_to_dataframe_rows(nonerror_data, [target_feature])
     return feature_data
 
 def create_logging_data(data, target_feature):
@@ -143,6 +143,7 @@ def create_logging_data(data, target_feature):
     processed_records_data  = pd.concat([nonerror_data, error_data]).drop_duplicates(keep = "first", subset = "recordId")\
                                                                     .reset_index(drop = True)
     return processed_records_data
+
     
 
 def main():
