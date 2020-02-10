@@ -26,6 +26,7 @@ from utils import gait_features_utils as gf_utils
 syn = sc.login()
 
 ## GLOBAL VARIABLES ## 
+#TODO: change this
 data_dict = {}
 data_dict["GAIT_MPOWER_V1_TABLE"]      = {"synId": "syn10308918", 
                                           "table_version": "MPOWER_V1"} 
@@ -112,13 +113,10 @@ def standardize_mpower_data(values):
     concat_data["table_version"] = table_version
     return concat_data  
 
-def clean_feature_sets(data, target_feature):
+def create_feature_sets(data, target_feature):
     """
-    Utility function to clean unused features, 
-    normalize list of json inside a column,
-    and remove error entries (empty filepaths, empty dataframe, no rotation data) 
-    from the dataframe
-    
+    Utility function normalize feature into several rows,
+    and clean feature sets
     Args:
       data (pd.DataFrame)    : dataframe of concattenated data
       target_feature (string): name of column of the pathfile to the .synapseCache 
@@ -130,10 +128,23 @@ def clean_feature_sets(data, target_feature):
                         'phoneInfo', 'createdOn', 'test_type', 
                         "table_version"]
     feature_cols = metadata_feature + [target_feature]
-    data = data[~data[target_feature].apply(lambda x: isinstance(x, list))][feature_cols]
-    data = query.normalize_list_dicts_to_dataframe_rows(data, [target_feature])
-    return data
+    non_error_data  = data[data[target_feature].apply(lambda x: isinstance(x, list))][feature_cols]
+    feature_data    = query.normalize_list_dicts_to_dataframe_rows(non_error_data, [target_feature])
+    return feature_data
+
+def create_logging_data(data, target_feature):
+    feature_cols = ["recordId", target_feature]
+    error_data      = data[data[target_feature].apply(lambda x: isinstance(x, str))][feature_cols] 
+    nonerror_data   = data[~data[target_feature].apply(lambda x: isinstance(x, str))][feature_cols]
+    error_data["query_message"]     = error_data[target_feature]
+    nonerror_data["query_message"]  = "PASS" 
+    error_data     = error_data[["recordId", "query_message"]]
+    nonerror_data  = nonerror_data[["recordId", "query_message"]]
+    processed_records_data  = pd.concat([nonerror_data, error_data]).drop_duplicates(keep = "first", subset = "recordId")\
+                                                                    .reset_index(drop = True)
+    return processed_records_data
     
+
 def main():
     args = read_args() 
     data = pd.concat([standardize_mpower_data(values) for key, 
@@ -146,22 +157,20 @@ def main():
     if args.update:
         print("\n#########  UPDATING DATA  ################\n")
         processed_records = query.check_children(syn = syn,
-                                                data_parent_id = data_dict["OUTPUT"]["parent_folder_synId"], 
-                                                filename = data_dict["OUTPUT"]["processed_records"])
+                                                 data_parent_id = data_dict["OUTPUT"]["parent_folder_synId"], 
+                                                 filename = data_dict["OUTPUT"]["processed_records"])
         prev_stored_data  = query.check_children(syn = syn, 
-                                                data_parent_id = data_dict["OUTPUT"]["parent_folder_synId"],
-                                                filename = data_dict["OUTPUT"]["data"])
+                                                 data_parent_id = data_dict["OUTPUT"]["parent_folder_synId"],
+                                                 filename = data_dict["OUTPUT"]["data"])
         data = data[~data["recordId"].isin(processed_records["recordId"].unique())]
         print("new rows that will be stored: {}".format(data.shape[0]))
     print("dataset combined, total rows for processing job are %s" %data.shape[0])
 
     ## featurize data ##
     data = query.parallel_func_apply(data, featurize_wrapper, int(args.cores), int(args.partition)) 
-    
-    ## clean rotation data ##
-    cleaned_data = clean_feature_sets(data, "gait_features")
+    cleaned_data = create_feature_sets(data, "gait_features")
+    ## append new data with old data
     cleaned_data = pd.concat([prev_stored_data, cleaned_data]).reset_index(drop = True)
-
     query.save_data_to_synapse(syn = syn, 
                             data = cleaned_data, 
                             source_table_id =  [values["synId"] for key, values in data_dict.items() if key != "OUTPUT"],

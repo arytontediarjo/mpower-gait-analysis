@@ -1,5 +1,13 @@
 """
-Featurization Pipeline Class on Gait Signal Data
+
+Author: Sage Bionetworks
+
+Featurization Pipeline Class on Gait Signal Data (userAcceleration, and rotation rate (gyroscope))
+This class will incorporate PDKit for translating gait signals into insightful features such as the user cadence, 
+stride duration etc. This class also segments data from rotational motion and 
+captures gait signals during rotation which is one of the strongest factors in inferring 
+knowledge of Parkinsons and Multiple Sclerosis 
+
 """
 
 # future liibrary imports ## 
@@ -68,7 +76,7 @@ class GaitFeaturize:
                 pdkit_gait_frequency_cutoff = 5, 
                 pdkit_gait_filter_order     = 4,
                 pdkit_gait_delta            = 0.5,
-                variance_cutoff             = 1e-3,
+                variance_cutoff             = 1e-4,
                 window_size                 = 512,
                 step_size                   = 50,
                 loco_band                   = [0.5, 3],
@@ -92,9 +100,9 @@ class GaitFeaturize:
 
     def get_sensor_data(self, data, sensor): 
         """
-        Utility Function to get sensor data given a filepath.
-        Data extraction will be adjusted to several different
-        json formatting of its key-value pairs based on mPower Synapse Table        
+        Utility Function to get sensor data given a filepath or a dataframe.
+        Data extraction will be adjusted to several different key-value format
+        of sensor data json files
         
         Args: 
             data     (dtype: string, pd.DataFrame): string of filepath or pandas DataFrame
@@ -102,55 +110,62 @@ class GaitFeaturize:
                                                     acceleration with gravity, 
                                                     gyroscope etc. from time series)
         Returns:
-            Rtype: pd.DataFrame
+            Rtype: pd.DataFrame, or string error messages
             Return a formatted version of the dataframe that contains an index of time-index dataframe (timestamp), 
             and columns of time differences in seconds, and sensor measurement in x, y, z coordinate from the filepaths.
-            Errors will be annotated with its reason, and instantiated with "#ERROR:...."
+            Errors will be annotated with its reason, and instantiated with "ERROR: <type of error>"
         """
-        ## if empty filepaths return it back ##
-        
-        if isinstance(data, str):
-            if data == "#ERROR: EMPTY FILEPATH":
-                return data
-        
-            ## open filepath ##
-            try:
+
+
+        if isinstance(data, (type(None), type(np.NaN))):
+            return "ERROR: Empty Filepath"
+
+        try:
+            if isinstance(data, str):
                 with open(data) as f:
                     json_data = f.read()
                     data = pd.DataFrame(json.loads(json_data))
-            except:
-                return "#ERROR: FILE CANNOT BE PARSED TO DATAFRAME"
-
-        ## return accelerometer data back if empty ##
-        if data.shape[0] == 0: 
-            return "#ERROR: EMPTY DATAFRAME"
         
-        ## retrieve data if sensor is stored as a long format ##
-        if ("sensorType" in data.columns):
-            try:
-                data = data[data["sensorType"] == sensor]
-            except:
-                return "#ERROR: SENSOR NOT AVAILABLE"
+            ## empty dataframe can be caused by two things:
+            ## key is not available or an empty dataframe itself, 
+            ## catch key error if sensor is not available
+            if not data.empty:
+                if ("sensorType" in data.columns):
+                    data = data[data["sensorType"] == sensor]
+                    if data.empty:
+                        raise KeyError
+                else:
+                    data = data[["timestamp", sensor]]
+                    data["x"] = data[sensor].apply(lambda x: x["x"])
+                    data["y"] = data[sensor].apply(lambda x: x["y"])
+                    data["z"] = data[sensor].apply(lambda x: x["z"])
+                    data = data.drop([sensor], axis = 1)
         
-        ## retrieve data if sensor is stored as a wide format ##
+        ## exceptions during data reading ##
+        except AttributeError as err:
+            data = "ERROR: %s"%type(err).__name__
+        except TypeError as err:
+            data = "ERROR: %s"%type(err).__name__
+        except FileNotFoundError as err:
+            data = "ERROR: %s"%type(err).__name__
+        except TypeError as err:
+            data = "ERROR: %s"%type(err).__name__
+        except MemoryError as err:
+            data = "ERROR: %s"%type(err).__name__
+        except KeyError as err:
+            data = "ERROR: %s"%type(err).__name__
+        except Exception as err:
+            raise(err)
         else:
-            try:
-                data = data[["timestamp", sensor]]
-                data["x"] = data[sensor].apply(lambda x: x["x"])
-                data["y"] = data[sensor].apply(lambda x: x["y"])
-                data["z"] = data[sensor].apply(lambda x: x["z"])
-                data = data.drop([sensor], axis = 1)
-            except:
-                return "#ERROR: SENSOR NOT AVAILABLE"
-
-        ## if the shape of data is zero after transformation, return sensor not available ##
-        if data.shape[0] == 0:
-            return "#ERROR: SENSOR NOT AVAILABLE"
-        
-        ## format dataframe to desired pdkit format ##
-        return self.format_time_series_data(data)
-
-        
+            ## check if empty
+            if data.empty:
+                data = "ERROR: Filepath has Empty Dataframe"
+            elif not (set(data.columns) >= set(["x","y", "z", "timestamp"])):
+                data = "ERROR: [timestamp, x, y, z] in columns is required for formatting"
+            else:
+                data = self.format_time_series_data(data)
+        finally:
+            return data
 
     def format_time_series_data(self, data):
         """
@@ -171,8 +186,6 @@ class GaitFeaturize:
             RType: pd.DataFrame
             Returns a formatted dataframe 
         """
-        if data.shape[0] == 0:
-            raise Exception("#ERROR: EMPTY DATAFRAME")
         data = data.dropna(subset = ["x", "y", "z"])
         date_series = pd.to_datetime(data["timestamp"], unit = "s")
         data["td"] = (date_series - date_series.iloc[0]).apply(lambda x: x.total_seconds())
@@ -188,7 +201,7 @@ class GaitFeaturize:
 
         ## sort all indexes ## 
         data = data.sort_index()
-        return data[["td","x","y","z","AA"]] 
+        return data[["td", "x", "y", "z", "AA"]] 
 
 
     def calculate_freeze_index(self, accel_series, sample_rate):
@@ -202,26 +215,33 @@ class GaitFeaturize:
             RType: List
             List containing 2 values of freeze index values [energy of freeze index, locomotor freeze index]
         """
-        loco_band   = self.loco_band
-        freeze_band = self.freeze_band
-        window_size = accel_series.shape[0]
-        f_res       = sample_rate / window_size
-        f_nr_LBs    = int(loco_band[0] / f_res)
-        f_nr_LBe    = int(loco_band[1] / f_res)
-        f_nr_FBs    = int(freeze_band[0] / f_res)
-        f_nr_FBe    = int(freeze_band[1] / f_res)
 
-        ## normalize series  ## 
-        normalized_accel_series = accel_series - np.mean(accel_series)
+        try:
+            loco_band   = self.loco_band
+            freeze_band = self.freeze_band
+            window_size = accel_series.shape[0]
+            f_res       = sample_rate / window_size
+            f_nr_LBs    = int(loco_band[0] / f_res)
+            f_nr_LBe    = int(loco_band[1] / f_res)
+            f_nr_FBs    = int(freeze_band[0] / f_res)
+            f_nr_FBe    = int(freeze_band[1] / f_res)
 
-        ## discrete fast fourier transform ##
-        Y = np.fft.fft(normalized_accel_series, int(window_size))
-        Pyy = abs(Y*Y) / window_size
-        areaLocoBand = numerical_integration( Pyy[f_nr_LBs-1 : f_nr_LBe],   sample_rate)
-        areaFreezeBand = numerical_integration( Pyy[f_nr_FBs-1 : f_nr_FBe], sample_rate)
-        sumLocoFreeze = areaFreezeBand + areaLocoBand
-        freezeIndex = areaFreezeBand / areaLocoBand
-        return freezeIndex, sumLocoFreeze
+            ## normalize series  ## 
+            normalized_accel_series = accel_series - np.mean(accel_series)
+
+            ## discrete fast fourier transform ##
+            Y = np.fft.fft(normalized_accel_series, int(window_size))
+            Pyy = abs(Y*Y) / window_size
+            areaLocoBand = numerical_integration( Pyy[f_nr_LBs-1 : f_nr_LBe],   sample_rate)
+            areaFreezeBand = numerical_integration( Pyy[f_nr_FBs-1 : f_nr_FBe], sample_rate)
+            sumLocoFreeze = areaFreezeBand + areaLocoBand
+            freezeIndex = areaFreezeBand / areaLocoBand
+        
+        except ZeroDivisionError:
+            return np.NaN, np.NaN
+        
+        else:
+            return freezeIndex, sumLocoFreeze
 
 
 
@@ -240,14 +260,6 @@ class GaitFeaturize:
             Return format {"rotation_chunk_1" : {omega: some_value, period: some_value},
                             "rotation_chunk_2": {omega: some_value, period: some_value}}
         """
-
-        ## check if dataframe is valid ## 
-        if not isinstance(gyro_dataframe, pd.DataFrame):
-            raise Exception("PIPELINE ERROR: PLEASE PARSE PANDAS DATAFRAME")
-
-        if gyro_dataframe.shape[0] == 0:
-            raise Exception("PIPELINE ERROR: DATAFRAME IS EMPTY")
-
         gyro_dataframe[axis] = butter_lowpass_filter(data        = gyro_dataframe[axis],
                                                     sample_rate  = self.sampling_frequency,
                                                     cutoff       = self.rotation_frequency_cutoff, 
@@ -292,14 +304,6 @@ class GaitFeaturize:
                 [{chunk1 : some_value, dataframe : pd.Dataframe}, 
                  {chunk2  : some_value, dataframe : pd.Dataframe}]
         """
-
-        ## check if dataframe is valid ##
-        if not isinstance(accel_dataframe, pd.DataFrame):
-            raise Exception("PIPELINE ERROR: PLEASE PARSE PANDAS DATAFRAME")
-
-        if accel_dataframe.shape[0] == 0:
-            raise Exception("PIPELINE ERROR: DATAFRAME IS EMPTY")
-
         ## instantiate initial values ## 
         chunk_list          =  []
         pointer             =  0 
@@ -366,35 +370,39 @@ class GaitFeaturize:
         
         ## separate to rotation and non rotation ## 
         for dataframe_dict in list_of_dataframe_dicts:
-            window_size     = self.window_size
-            step_size       = self.step_size
-            jPos            = window_size 
-            curr_chunk      = dataframe_dict["chunk"]
-            curr_dataframe  = dataframe_dict["dataframe"]
-            if curr_dataframe.shape[0] < 2:
+            end_window_pointer = self.window_size 
+            curr_chunk         = dataframe_dict["chunk"]
+            curr_dataframe     = dataframe_dict["dataframe"]
+            
+            if curr_dataframe.shape[0] < 0.5 * self.sampling_frequency:
                 continue
+
+            ## define if chunk is a rotation sequence
             if "rotation_chunk" in curr_chunk:
-                isRotation = True
                 rotation_omega = rotation_dict[curr_chunk]["omega"]
             else:
-                isRotation = False
                 rotation_omega = np.NaN
-            if (len(curr_dataframe) < jPos) or isRotation:
+
+            ## capture edge cases where dataframe is smaller than window, or is a rotation sequence
+            if (curr_dataframe.shape[0] < end_window_pointer) or (rotation_omega > 0):
                 feature_dict = self.get_pdkit_gait_features(curr_dataframe)
                 feature_dict["rotation_omega"] = rotation_omega
                 feature_dict["window"]         = "window_%s"%num_window
                 feature_list.append(feature_dict)
                 num_window += 1
-            else:
-                while jPos < len(curr_dataframe):
-                    jStart     = jPos - window_size
-                    subset     = curr_dataframe.iloc[jStart:jPos]
-                    feature_dict = self.get_pdkit_gait_features(subset)
-                    feature_dict["rotation_omega"] = rotation_omega
-                    feature_dict["window"]         = "window_%s"%num_window
-                    feature_list.append(feature_dict)
-                    jPos += step_size
-                    num_window += 1   
+                continue
+
+            ## ideal case when data chunk is larger than window ## 
+            while end_window_pointer < curr_dataframe.shape[0]:
+                start_window_pointer           = end_window_pointer - self.window_size
+                subset                         = curr_dataframe.iloc[start_window_pointer:end_window_pointer]
+                feature_dict                   = self.get_pdkit_gait_features(subset)
+                feature_dict["rotation_omega"] = rotation_omega
+                feature_dict["window"]         = "window_%s"%num_window
+                feature_list.append(feature_dict)
+                end_window_pointer += self.step_size
+                num_window         += 1           
+        
         return feature_list
 
 
@@ -422,13 +430,7 @@ class GaitFeaturize:
             Returns dictionary containing features computed from PDKit Package
         """
 
-        ## check if dataframe is valid ##
-        if not isinstance(accel_dataframe, pd.DataFrame):
-            raise Exception("PIPELINE ERROR: PLEASE PARSE PANDAS DATAFRAME INTO PARAMETER")
-
-        if accel_dataframe.shape[0] == 0:
-            raise Exception("PIPELINE ERROR: DATAFRAME IS EMPTY")
-
+        ## check if dataframe is valid ##    
         window_start = accel_dataframe.td[0]
         window_end = accel_dataframe.td[-1]
         window_duration = window_end - window_start
@@ -442,20 +444,17 @@ class GaitFeaturize:
             series  = accel_dataframe[axis] 
             var     = series.var()
             try:
-                if (var) < 1e-4:
+                if (var) < self.variance_cutoff:
                     steps   = 0
                     cadence = 0
                 else:
                     strikes, _ = gp.heel_strikes(series)
                     steps      = np.size(strikes) 
                     cadence    = steps/window_duration
-            except:
+            except (IndexError, ValueError):
                 steps   = 0 
                 cadence = 0
-            try:
-                speed_of_gait = gp.speed_of_gait(series, wavelet_level = 6)   
-            except:
-                speed_of_gait = np.NaN
+
             if steps >= 2:   
                 step_durations = []
                 for i in range(1, np.size(strikes)):
@@ -466,7 +465,7 @@ class GaitFeaturize:
                 avg_step_duration = np.NaN
                 sd_step_duration  = np.NaN
 
-            if steps >= 4:
+            if (steps >= 4) and (avg_step_duration > 0):
                 strides1              = strikes[0::2]
                 strides2              = strikes[1::2]
                 stride_durations1     = []
@@ -477,44 +476,29 @@ class GaitFeaturize:
                     stride_durations2.append(strides2[i] - strides2[i-1])
                 avg_number_of_strides = np.mean([np.size(strides1), np.size(strides2)])
                 avg_stride_duration   = np.mean((np.mean(stride_durations1),
-                            np.mean(stride_durations2)))
+                                                np.mean(stride_durations2)))
                 sd_stride_duration    = np.mean((np.std(stride_durations1),
-                            np.std(stride_durations2)))
+                                                np.std(stride_durations2)))
+                step_regularity, stride_regularity, symmetry  = gp.gait_regularity_symmetry(series, 
+                                                                average_step_duration   = avg_step_duration, 
+                                                                average_stride_duration = avg_stride_duration)
             else:
                 avg_number_of_strides  = np.NaN
                 avg_stride_duration    = np.NaN
                 sd_stride_duration     = np.NaN
-            try:
-                step_regularity        = gp.gait_regularity_symmetry(series, average_step_duration=avg_step_duration, 
-                                                            average_stride_duration=avg_stride_duration)[0]
-            except:
                 step_regularity        = np.NaN
-
-            try:
-                stride_regularity      = gp.gait_regularity_symmetry(series, average_step_duration=avg_step_duration, 
-                                                            average_stride_duration=avg_stride_duration)[1]
-            except:
-                stride_regularity      = np.NaN     
-            try:
-                symmetry               =  gp.gait_regularity_symmetry(series, average_step_duration=avg_step_duration, 
-                                                            average_stride_duration=avg_stride_duration)[2]       
-            except:
+                stride_regularity      = np.NaN
                 symmetry               = np.NaN
-            try:
-                energy_freeze_index    = calculate_freeze_index(series, 100)[0]
-            except:
-                energy_freeze_index    = np.NaN
-            try:
-                locomotor_freeze_index = calculate_freeze_index(series, 100)[1]
-            except:
-                locomotor_freeze_index = np.NaN
 
+            speed_of_gait = gp.speed_of_gait(series, wavelet_level = 6)   
+            energy_freeze_index, locomotor_freeze_index = self.calculate_freeze_index(series, self.sampling_frequency)
+            
             feature_dict["%s_steps"%axis]                 = steps
             feature_dict["%s_energy_freeze_index"%axis]   = energy_freeze_index
             feature_dict["%s_loco_freeze_index"%axis]     = locomotor_freeze_index
             feature_dict["%s_avg_step_duration"%axis]     = avg_step_duration
             feature_dict["%s_sd_step_duration"%axis]      = sd_step_duration
-            feature_dict["%s_walking_cadence"%axis]       = cadence
+            feature_dict["%s_cadence"%axis]               = cadence
             feature_dict["%s_avg_number_of_strides"%axis] = avg_number_of_strides
             feature_dict["%s_avg_stride_duration"%axis]   = avg_stride_duration
             feature_dict["%s_sd_stride_duration"%axis]    = sd_stride_duration
@@ -556,14 +540,13 @@ class GaitFeaturize:
             A list of dictionary. With each dictionary representing gait features on one window.
         """
 
-        accel_data    = self.get_sensor_data(data, "userAcceleration")
-        rotation_data = self.get_sensor_data(data, "rotationRate")        
-        
-        ## Check if time series is of type dataframe and not an empty dataframe                     
-        if not ((isinstance(rotation_data, pd.DataFrame) and isinstance(accel_data, pd.DataFrame))):
-            return "#ERROR: EMPTY FILEPATH"
-        if not ((rotation_data.shape[0] != 0 and (accel_data.shape[0] != 0))):
-            return "#ERROR: EMPTY DATAFRAME"
+        accel_data                 = self.get_sensor_data(data, "userAcceleration")
+        rotation_data              = self.get_sensor_data(data, "rotationRate")
+
+        if not (isinstance(accel_data, pd.DataFrame)): 
+            return accel_data
+        if not (isinstance(rotation_data, pd.DataFrame)):
+            return rotation_data
 
         resampled_rotation         = self.resample_signal(rotation_data)
         resampled_accel            = self.resample_signal(accel_data)

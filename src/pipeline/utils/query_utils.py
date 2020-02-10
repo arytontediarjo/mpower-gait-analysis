@@ -1,3 +1,12 @@
+"""
+Author: Sage Bionetworks
+
+Utility functions used for Sage Bionetworks data pipeline process,
+starting from table querying, setting provenance, updating data, 
+and updating git repo (TODO)
+"""
+
+
 ## future library imports ## 
 from __future__ import unicode_literals
 from __future__ import print_function
@@ -32,7 +41,6 @@ def get_walking_synapse_table(syn,
         2.) mpower v1 and elevate MS "device_motion" data will be taken, and all json files from mpowerV2 and mpower_passive will be taken
         3.) Use synapse downloadTableColumns to download all the designated column files from the table
         4.) Inner join the parsed dataframe from synapse table query dataframe with download Table Columns by their file handle ids
-        5.) Annotate any empty filepaths as "#ERROR"
     
     Args:  
         syn              : synapse object,             
@@ -98,94 +106,11 @@ def get_walking_synapse_table(syn,
                                     "file_path": "{}_pathfile".format(feat)})\
                                         .drop(["file_handle_id"], axis = 1)
     ## Empty Filepaths on synapseTable ##
-    data = data.fillna("#ERROR: EMPTY FILEPATH") 
     cols = [feat for feat in data.columns if "path_id" not in feat]
     return data[cols]
 
-def get_sensor_data_from_filepath(filepath, sensor): 
-        """
-        Utility Function to get sensor data given a filepath, and sensor type
-        will adjust to different table entity versions accordingly by 
-        extracting specific keys in json patterns. 
-        
-        Note: Empty filepaths, Empty Dataframes will be annotated with "#ERROR"
 
-        Args: 
-            filepath (type: string): string of filepath
-            sensor   (type: string): the sensor type (userAcceleration, 
-                                                    acceleration with gravity, 
-                                                    gyroscope etc. from time series)
 
-        Returns:
-            Rtype: pd.DataFrame
-            Return a formatted version of the dataframe that contains an index of time-index dataframe (timestamp), 
-            and columns of time differences in seconds, and sensor measurement in x, y, z coordinate from the filepaths
-        """
-        ## if empty filepaths return it back ##
-        if not (isinstance(filepath, str) and (filepath != "#ERROR")):
-            return "#ERROR"
-        
-        ## open filepath ##
-        with open(filepath) as f:
-            json_data = f.read()
-            data = pd.DataFrame(json.loads(json_data))
-
-        ## return accelerometer data back if empty ##
-        if data.shape[0] == 0: 
-            return "#ERROR"
-        
-        ## get data from mpowerV2 column patterns ##
-        if ("sensorType" in data.columns):
-            try:
-                data = data[data["sensorType"] == sensor]
-            except:
-                return "#ERROR"
-        
-        ## get data from mpowerV1 column patterns ##
-        else:
-            try:
-                data = data[["timestamp", sensor]]
-                data["x"] = data[sensor].apply(lambda x: x["x"])
-                data["y"] = data[sensor].apply(lambda x: x["y"])
-                data["z"] = data[sensor].apply(lambda x: x["z"])
-                data = data.drop([sensor], axis = 1)
-            except:
-                return "#ERROR"
-
-        ## if shape of data is zero return #ERROR ##
-        if data.shape[0] == 0:
-            return "#ERROR"
-        
-        ## format dataframe to dateTimeIndex, td, x, y, z
-        return format_time_series_data(data)
-    
-
-def format_time_series_data(data):
-    """
-    Utility function to clean accelerometer data to a desirable format 
-    required by the PDKIT package.
-    
-    Args: 
-        data(type: pd.DataFrame): pandas dataframe of time series
-    
-    Returns:
-        RType: pd.DataFrame
-        Returns an indexed datetimeindex in seconds, time differences in seconds from the start of the test (float), 
-        x (float), y (float), z (float), AA (float) 
-    """
-    if data.shape[0] == 0:
-        raise Exception("Empty DataFrame")
-    data = data.dropna(subset = ["x", "y", "z"])
-    date_series = pd.to_datetime(data["timestamp"], unit = "s")
-    data["td"] = (date_series - date_series.iloc[0]).apply(lambda x: x.total_seconds())
-    data["time"] = data["td"]
-    data = data.set_index("time")
-    data.index = pd.to_datetime(data.index, unit = "s")
-    data["AA"] = np.sqrt(data["x"]**2 + data["y"]**2 + data["z"]**2)
-    data = data.sort_index()
-    return data[["td","x","y","z","AA"]] 
-    
-    
 def save_data_to_synapse(syn,
                         data, 
                         output_filename,
@@ -292,6 +217,7 @@ def get_file_entity(syn, synid):
         separator = ","
     data = pd.read_csv(entity["path"],index_col = 0, sep = separator)
     return data
+
 
 def parallel_func_apply(df, func, no_of_processors, chunksize):
     """
