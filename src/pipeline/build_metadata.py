@@ -1,3 +1,7 @@
+"""
+Script to gather all Demographics Data from all gait data from Synapse Table
+"""
+
 ## import future libraries ## 
 from __future__ import print_function
 from __future__ import unicode_literals
@@ -15,9 +19,11 @@ from utils import query_utils as query
 from utils import gait_features_utils as gf_utils
 
 ## global variables ## 
-DEMO_DATA_V1  = "syn10371840"
-DEMO_DATA_V2  = "syn15673379"
-DEMO_DATA_EMS = "syn10295288"
+data_dict = {"DEMO_DATA_V1": "syn10371840",
+            "DEMO_DATA_V2": "syn15673379",
+            "DEMO_DATA_EMS": "syn10295288",
+            "PROFILE_DATA_EMS": "syn10235463"}
+
 syn = sc.login()
 
 ## helper functions ## 
@@ -76,32 +82,35 @@ def generate_demographic_info(syn, data):
     demo_data_v1 = syn.tableQuery("SELECT age, healthCode, \
                                 inferred_diagnosis as PD,  \
                                 gender FROM {}\
-                                where dataGroups NOT LIKE '%test_user%'".format(DEMO_DATA_V1)).asDataFrame()
+                                where dataGroups NOT LIKE '%test_user%'".format(data_dict["DEMO_DATA_V1"])).asDataFrame()
     demo_data_v1 = demo_data_v1[(demo_data_v1["gender"] == "Female") | (demo_data_v1["gender"] == "Male")]
-    demo_data_v1 = demo_data_v1.dropna(subset = ["PD"], thresh = 1)                     ## drop if no diagnosis
+    demo_data_v1 = demo_data_v1.dropna(subset = ["PD"], thresh = 1)                               ## drop if no diagnosis
     demo_data_v1["class"] = demo_data_v1["PD"].map({True :"PD", False:"control"})                 ## encode as numeric binary
     demo_data_v1["age"] = demo_data_v1["age"].apply(lambda x: float(x))  
 
     ## demographics on ElevateMS ##
     demo_data_ems = syn.tableQuery("SELECT healthCode, dataGroups as MS,\
                                 'gender.json.answer' as gender from {}\
-                                where dataGroups NOT LIKE '%test_user%'".format(DEMO_DATA_EMS)).asDataFrame()
+                                where dataGroups NOT LIKE '%test_user%'".format(data_dict["DEMO_DATA_EMS"])).asDataFrame()
+    profile_data_ems = syn.tableQuery("SELECT healthCode as healthCode, \
+                                    'demographics.age' as age from {}".format(data_dict["PROFILE_DATA_EMS"])).asDataFrame()
+    demo_data_ems = pd.merge(demo_data_ems, profile_data_ems, how = "left", on = "healthCode")
     demo_data_ems = demo_data_ems[(demo_data_ems["gender"] == "Male") | (demo_data_ems["gender"] == "Female")]
     demo_data_ems["class"] = demo_data_ems["MS"].map({"ms_patient":"MS", "control":"control"})
-    demo_data_ems["age"]  = 0
+    demo_data_ems          = demo_data_ems.dropna(subset = ["age", "class"])
     
     ## demographics on mpower version 2 ##
     demo_data_v2 = syn.tableQuery("SELECT birthYear, createdOn, healthCode, \
                                     diagnosis as PD, sex as gender FROM {} \
-                                    where dataGroups NOT LIKE '%test_user%'".format(DEMO_DATA_V2)).asDataFrame()
+                                    where dataGroups NOT LIKE '%test_user%'".format(data_dict["DEMO_DATA_V2"])).asDataFrame()
     demo_data_v2        = demo_data_v2[(demo_data_v2["gender"] == "male") | (demo_data_v2["gender"] == "female")]
     demo_data_v2        = demo_data_v2[demo_data_v2["PD"] != "no_answer"]               
     demo_data_v2["class"]  = demo_data_v2["PD"].map({"parkinsons":"PD", "control":"control"})
     demo_data_v2["birthYear"] = demo_data_v2[demo_data_v2["birthYear"].apply(lambda x: True if x>=0 else False)]
     demo_data_v2["age"] = pd.to_datetime(demo_data_v2["createdOn"], unit = "ms").dt.year - demo_data_v2["birthYear"] 
-    
-    
-    demo_data = pd.concat([demo_data_v1, demo_data_v2, demo_data_ems]).reset_index(drop = True)
+
+    ## concatenate all demographic data
+    demo_data = pd.concat([demo_data_v1, demo_data_v2, demo_data_ems], sort = False).reset_index(drop = True)
     
     ## filter age range ##
     demo_data = demo_data[(demo_data["age"] <= 120) & (demo_data["age"] >= 0)]
@@ -143,8 +152,11 @@ def generate_demographic_info(syn, data):
 def main():
     """
     Main Function
+    Entry point for the script
+    Note: Passive gait data will be separated from active gait data
+             as we dont want to combine both in analysis
     """
-    gait_data    = query.get_file_entity(syn = syn, synid = "syn21542870")
+    gait_data    = query.get_file_entity(syn = syn, synid = "syn21575055")
     active_data  = gait_data[gait_data["table_version"] != "MPOWER_PASSIVE"]
     passive_data = gait_data[gait_data["table_version"] == "MPOWER_PASSIVE"]
     active_metadata = generate_demographic_info(syn, active_data)
@@ -153,18 +165,15 @@ def main():
     ## save data to synapse ##
     query.save_data_to_synapse(syn = syn,
                                 data = active_metadata,
-                                output_filename = "active_gait_user_metadata.csv",
+                                output_filename = "all_active_gait_user_metadata.csv",
                                 data_parent_id = "syn21537423")
     ## save data to synapse ##
     query.save_data_to_synapse(syn = syn,
                                 data = passive_metadata,
-                                output_filename = "passive_gait_user_metadata.csv",
+                                output_filename = "all_passive_gait_user_metadata.csv",
                                 data_parent_id = "syn21537423")
 
 if __name__ ==  '__main__': 
     start_time = time.time()
     main()
     print("--- %s seconds ---" % (time.time() - start_time))
-
-
-
