@@ -102,10 +102,8 @@ def standardize_mpower_data(values):
     for filepath in filepath_cols:
         data_dict[filepath] = data[(metadata + [filepath])]
         if (("rest" not in filepath) and ("balance" not in filepath)):
-            print("walk: %s" %filepath)
             data_dict[filepath]["test_type"] = "walking"
         else:
-            print("balance: %s" %filepath)
             data_dict[filepath]["test_type"] = "balance"
         data_dict[filepath].columns = ["gait_json_filepath" if ((cols not in metadata) and (cols != "test_type"))\
                                        else cols for cols in data_dict[filepath].columns]
@@ -155,7 +153,7 @@ def main():
     processed_records    = pd.DataFrame()
     cleaned_data = pd.DataFrame()
     new_records  = pd.DataFrame()
-
+    
     if args.update:
         print("\n#########  UPDATING DATA  ################\n")
         processed_records = query.check_children(syn = syn,
@@ -166,7 +164,6 @@ def main():
                                                  filename = data_dict["OUTPUT_INFO"]["featurized_data"])
         data = data[~data["recordId"].isin(processed_records["recordId"].unique())]
 
-        print(data.columns)
         print("new rows that will be stored: {}".format(data.shape[0]))
     print("dataset combined, total rows for processing job are %s" %data.shape[0])
 
