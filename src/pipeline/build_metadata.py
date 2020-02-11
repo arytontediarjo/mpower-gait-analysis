@@ -19,10 +19,16 @@ from utils import query_utils as query
 from utils import gait_features_utils as gf_utils
 
 ## global variables ## 
-data_dict = {"DEMO_DATA_V1": "syn10371840",
-            "DEMO_DATA_V2": "syn15673379",
-            "DEMO_DATA_EMS": "syn10295288",
-            "PROFILE_DATA_EMS": "syn10235463"}
+data_dict = {"DEMO_DATA_V1"   : {"synId": "syn10371840"},
+            "DEMO_DATA_V2"    : {"synId": "syn15673379"},
+            "DEMO_DATA_EMS"   : {"synId": "syn10295288"},
+            "PROFILE_DATA_EMS": {"synId": "syn10235463"},
+            "OUTPUT_INFO"     : {"active_metadata_filename"  : "active_gait_metadata.csv",
+                                 "passive_metadata_filename" : "passive_gait_metadata.csv",
+                                 "parent_folder_synId"       : "syn21537423",
+                                 "proj_repo_name"            : "mpower-gait-analysis",
+                                 "path_to_github_token"      : "~/git_token.txt"}
+}
 
 syn = sc.login()
 
@@ -133,13 +139,13 @@ def generate_demographic_info(syn, data):
     data = pd.merge(data, demo_data, how = "inner", on = "healthCode")
     
     ## aggregation of metadata features ##
-    data= data[["recordId", "healthCode", "phoneInfo", "age", "gender", "class", "version"]].groupby(["healthCode"])\
+    data= data[["recordId", "healthCode", "phoneInfo", "age", "gender", "class", "table_version"]].groupby(["healthCode"])\
                 .agg({"recordId": pd.Series.nunique,
                      "phoneInfo": pd.Series.mode,
                      "class": pd.Series.mode,
                      "gender": pd.Series.mode,
                      "age": pd.Series.mode,
-                     "version": pd.Series.mode})
+                     "table_version": pd.Series.mode})
     data = data.rename({"recordId":"nrecords"}, axis = 1)
     
     ## integrity checking ##
@@ -162,15 +168,24 @@ def main():
     active_metadata = generate_demographic_info(syn, active_data)
     passive_metadata = generate_demographic_info(syn, passive_data)
     
-    ## save data to synapse ##
+    ## save active data to synapse ##
     query.save_data_to_synapse(syn = syn,
                                 data = active_metadata,
-                                output_filename = "all_active_gait_user_metadata.csv",
-                                data_parent_id = "syn21537423")
-    ## save data to synapse ##
+                                source_table_id = [values["synId"] for key, values in data_dict.items() if key != "OUTPUT_INFO"],
+                                used_script = query.get_git_used_script_url(path_to_github_token = data_dict["OUTPUT_INFO"]["path_to_github_token"],
+                                                                            proj_repo_name       = data_dict["OUTPUT_INFO"]["proj_repo_name"],
+                                                                            script_name          = __file__),  
+                                output_filename = data_dict["OUTPUT_INFO"]["active_metadata_filename"],
+                                data_parent_id  = "syn21537423")
+    
+    ## save passive data to synapse ##
     query.save_data_to_synapse(syn = syn,
                                 data = passive_metadata,
-                                output_filename = "all_passive_gait_user_metadata.csv",
+                                source_table_id = [values["synId"] for key, values in data_dict.items() if key != "OUTPUT_INFO"],
+                                used_script = query.get_git_used_script_url(path_to_github_token = data_dict["OUTPUT_INFO"]["path_to_github_token"],
+                                                                            proj_repo_name       = data_dict["OUTPUT_INFO"]["proj_repo_name"],
+                                                                            script_name          = __file__),  
+                                output_filename = data_dict["OUTPUT_INFO"]["passive_metadata_filename"],
                                 data_parent_id = "syn21537423")
 
 if __name__ ==  '__main__': 
