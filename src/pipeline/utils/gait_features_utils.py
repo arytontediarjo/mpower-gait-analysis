@@ -1,13 +1,6 @@
 """
-
 Author: Sage Bionetworks
-
-Featurization Pipeline Class on Gait Signal Data (userAcceleration, and rotation rate (gyroscope))
-This class will incorporate PDKit for translating gait signals into insightful features such as the user cadence, 
-stride duration etc. This class also segments data from rotational motion and 
-captures gait signals during rotation which is one of the strongest factors in inferring 
-knowledge of Parkinsons and Multiple Sclerosis 
-
+About: Featurization Pipeline Class on Gait Signal Data (userAcceleration, and rotation rate (gyroscope))
 """
 
 # future liibrary imports ## 
@@ -465,7 +458,7 @@ class GaitFeaturize:
                 avg_step_duration = np.NaN
                 sd_step_duration  = np.NaN
 
-            if (steps >= 4) and (avg_step_duration > 0):
+            if (steps >= 4) and (avg_step_duration > 1/self.sampling_frequency):
                 strides1              = strikes[0::2]
                 strides2              = strikes[1::2]
                 stride_durations1     = []
@@ -479,6 +472,8 @@ class GaitFeaturize:
                                                 np.mean(stride_durations2)))
                 sd_stride_duration    = np.mean((np.std(stride_durations1),
                                                 np.std(stride_durations2)))
+
+                
                 step_regularity, stride_regularity, symmetry  = gp.gait_regularity_symmetry(series, 
                                                                 average_step_duration   = avg_step_duration, 
                                                                 average_stride_duration = avg_stride_duration)

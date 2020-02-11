@@ -1,5 +1,8 @@
 """
-A pipeline script for extracting all the gait data from 
+Author: Sage Bionetworks
+
+About:
+A main pipeline script for extracting all the gait data from 
 Sage Bionetworks Synapse Table (MPowerV1, MPowerV2, MPower Passive, Elevate MS),
 featurize data based on rotational features and features from PDKit (external source). 
 Result of this data pipeline will all be saved as Synapse File Entity.
@@ -26,19 +29,16 @@ from utils import gait_features_utils as gf_utils
 syn = sc.login()
 
 ## GLOBAL VARIABLES ## 
-#TODO: change this
-data_dict = {}
-data_dict["GAIT_MPOWER_V1_TABLE"]      = {"synId": "syn10308918", 
-                                          "table_version": "MPOWER_V1"} 
-data_dict["GAIT_MPOWER_V2_TABLE"]      = {"synId": "syn12514611", 
-                                          "table_version": "MPOWER_V2"}
-data_dict["GAIT_MPOWER_PASSIVE_TABLE"] = {"synId": "syn17022539", 
-                                          "table_version": "MPOWER_PASSIVE"}
-data_dict["GAIT_EMS_TABLE"]            = {"synId": "syn10278766", 
-                                          "table_version": "ELEVATE_MS"}
-data_dict["OUTPUT"]                    =  { "data"   : "featurized_gait_data.csv",
-                                            "processed_records"      : "processed_records.csv",
-                                            "parent_folder_synId"    : "syn21537420"}
+data_dict = {"GAIT_MPOWER_V1_TABLE"     : {"synId": "syn10308918", "table_version": "MPOWER_V1"}, 
+            "GAIT_MPOWER_V2_TABLE"      : {"synId": "syn12514611", "table_version": "MPOWER_V2"},
+            "GAIT_MPOWER_PASSIVE_TABLE" : {"synId": "syn17022539", "table_version": "MPOWER_PASSIVE"},
+            "GAIT_EMS_TABLE"            : {"synId" : "syn10278766", "table_version": "ELEVATE_MS"},
+            "OUTPUT_INFO"               : {"featurized_data"      : "featurized_gait_data.csv",
+                                            "records_data"        : "processed_records.csv",
+                                            "parent_folder_synId" : "syn21537420",
+                                            "proj_repo_name"      : "mpower-gait-analysis",
+                                            "path_to_github_token": "~/git_token.txt"}
+}
 
 def read_args():
     """
@@ -137,19 +137,18 @@ def create_logging_data(data, target_feature):
     error_data      = data[data[target_feature].apply(lambda x: isinstance(x, str))][feature_cols] 
     nonerror_data   = data[~data[target_feature].apply(lambda x: isinstance(x, str))][feature_cols]
     error_data["query_message"]     = error_data[target_feature]
-    nonerror_data["query_message"]  = "PASS" 
+    nonerror_data["query_message"]  = "PASS"
     error_data     = error_data[["recordId", "query_message"]]
     nonerror_data  = nonerror_data[["recordId", "query_message"]]
     processed_records_data  = pd.concat([nonerror_data, error_data]).drop_duplicates(keep = "first", subset = "recordId")\
                                                                     .reset_index(drop = True)
     return processed_records_data
 
-    
 
 def main():
     args = read_args() 
     data = pd.concat([standardize_mpower_data(values) for key, 
-                      values in data_dict.items() if key != "OUTPUT"]).reset_index(drop = True)
+                      values in data_dict.items() if key != "OUTPUT_INFO"]).reset_index(drop = True)
     
     ## instantiate empty dataframes ## 
     prev_stored_data     = pd.DataFrame()
@@ -158,11 +157,11 @@ def main():
     if args.update:
         print("\n#########  UPDATING DATA  ################\n")
         processed_records = query.check_children(syn = syn,
-                                                 data_parent_id = data_dict["OUTPUT"]["parent_folder_synId"], 
-                                                 filename = data_dict["OUTPUT"]["processed_records"])
+                                                 data_parent_id = data_dict["OUTPUT_INFO"]["parent_folder_synId"], 
+                                                 filename = data_dict["OUTPUT_INFO"]["records_data"])
         prev_stored_data  = query.check_children(syn = syn, 
-                                                 data_parent_id = data_dict["OUTPUT"]["parent_folder_synId"],
-                                                 filename = data_dict["OUTPUT"]["data"])
+                                                 data_parent_id = data_dict["OUTPUT_INFO"]["parent_folder_synId"],
+                                                 filename = data_dict["OUTPUT_INFO"]["featurized_data"])
         data = data[~data["recordId"].isin(processed_records["recordId"].unique())]
         print("new rows that will be stored: {}".format(data.shape[0]))
     print("dataset combined, total rows for processing job are %s" %data.shape[0])
@@ -173,25 +172,31 @@ def main():
     ## append new data with old data
     cleaned_data = pd.concat([prev_stored_data, cleaned_data]).reset_index(drop = True)
     query.save_data_to_synapse(syn = syn, 
-                            data = cleaned_data, 
-                            source_table_id =  [values["synId"] for key, values in data_dict.items() if key != "OUTPUT"],
-                            output_filename = data_dict["OUTPUT"]["data"],
-                            data_parent_id = data_dict["OUTPUT"]["parent_folder_synId"])
+                            data = cleaned_data,
+                            used_script = query.get_git_used_script_url(path_to_github_token = data_dict["OUTPUT_INFO"]["path_to_github_token"],
+                                                                        proj_repo_name       = data_dict["OUTPUT_INFO"]["proj_repo_name"],
+                                                                        script_name          = __file__),  
+                            source_table_id =  [values["synId"] for key, values in data_dict.items() if key != "OUTPUT_INFO"],
+                            output_filename = data_dict["OUTPUT_INFO"]["featurized_data"],
+                            data_parent_id = data_dict["OUTPUT_INFO"]["parent_folder_synId"])
     
-    print("\n################################## Saved Gait Data ######################################\n")
+    print("\n################################## SAVED GAIT DATA ######################################\n")
     
     
     ## update processed records ##
-    new_records = data[["recordId"]].drop_duplicates(keep = "first").reset_index(drop = True)
+    new_records = create_logging_data(data, "gait_features")
     processed_records = pd.concat([processed_records, new_records]).reset_index(drop = True)
 
     query.save_data_to_synapse(syn = syn,
                                 data = processed_records,
-                                source_table_id = [values["synId"] for key, values in data_dict.items() if key != "OUTPUT"],
-                                output_filename = data_dict["OUTPUT"]["processed_records"],
-                                data_parent_id  = data_dict["OUTPUT"]["parent_folder_synId"])
+                                used_script = query.get_git_used_script_url(path_to_github_token = data_dict["OUTPUT_INFO"]["path_to_github_token"],
+                                                                            proj_repo_name       = data_dict["OUTPUT_INFO"]["proj_repo_name"],
+                                                                            script_name          = __file__),  
+                                source_table_id = [values["synId"] for key, values in data_dict.items() if key != "OUTPUT_INFO"],
+                                output_filename = data_dict["OUTPUT_INFO"]["records_data"],
+                                data_parent_id  = data_dict["OUTPUT_INFO"]["parent_folder_synId"])
     
-    print("\n################################## Saved Processed RecordIds Logging ########################\n") 
+    print("\n################################## SAVED RECORDID LOGGING ########################\n") 
     
 
 if __name__ ==  '__main__': 

@@ -13,6 +13,8 @@ from __future__ import print_function
 
 ## standard library imports ##
 import sys
+import subprocess
+from github import Github
 import json 
 import os
 import pandas as pd
@@ -257,6 +259,38 @@ def check_children(syn, data_parent_id, filename):
                 prev_stored_data_id = children["id"]
                 prev_stored_data = get_file_entity(syn, prev_stored_data_id)
     return prev_stored_data
+
+
+def get_git_used_script_url(path_to_github_token, 
+                            proj_repo_name, script_name):
+    """
+    Utility function to get running script based on current git HEAD
+    of where the script is being executed.
+
+    Args:
+        path_to_github_token (dtype:string) = filepath to github token
+        repo_name            (dtype:string) = name of project repo
+        script_name          (dtype:string) = name of executed script
+
+    Returns:
+        RType: String
+        Returns a string of URL to github on executed script
+    """
+    try:
+        token = open(path_to_github_token, "r").read()
+        g = Github(token)
+        user_name     = g.get_user().login
+        head_sha      = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('ascii').strip()
+        relative_path = subprocess.check_output(["git", "rev-parse", "--show-prefix"]).decode('ascii').strip()
+    except:
+        raise("some error message, TODO")
+    else:
+        script_url = "https://github.com/%s/%s/blob/%s/%s%s"%(user_name, 
+                                                            proj_repo_name, 
+                                                            head_sha, 
+                                                            relative_path, 
+                                                            script_name)
+    return script_url
 
 
 
