@@ -153,7 +153,9 @@ def main():
     ## instantiate empty dataframes ## 
     prev_stored_data     = pd.DataFrame()
     processed_records    = pd.DataFrame()
-    
+    cleaned_data = pd.DataFrame()
+    new_records  = pd.DataFrame()
+
     if args.update:
         print("\n#########  UPDATING DATA  ################\n")
         processed_records = query.check_children(syn = syn,
@@ -163,12 +165,17 @@ def main():
                                                  data_parent_id = data_dict["OUTPUT_INFO"]["parent_folder_synId"],
                                                  filename = data_dict["OUTPUT_INFO"]["featurized_data"])
         data = data[~data["recordId"].isin(processed_records["recordId"].unique())]
+
+        print(data.columns)
         print("new rows that will be stored: {}".format(data.shape[0]))
     print("dataset combined, total rows for processing job are %s" %data.shape[0])
 
-    ## featurize data ##
-    data = query.parallel_func_apply(data, featurize_wrapper, int(args.cores), int(args.partition)) 
-    cleaned_data = create_feature_sets(data, "gait_features")
+    ## featurize data if not empty ##
+    if not data.empty:
+        data = query.parallel_func_apply(data, featurize_wrapper, int(args.cores), int(args.partition))
+        new_records = create_logging_data(data, "gait_features")
+        cleaned_data = create_feature_sets(data, "gait_features")
+
     ## append new data with old data
     cleaned_data = pd.concat([prev_stored_data, cleaned_data]).reset_index(drop = True)
     query.save_data_to_synapse(syn = syn, 
@@ -184,7 +191,6 @@ def main():
     
     
     ## update processed records ##
-    new_records = create_logging_data(data, "gait_features")
     processed_records = pd.concat([processed_records, new_records]).reset_index(drop = True)
 
     query.save_data_to_synapse(syn = syn,

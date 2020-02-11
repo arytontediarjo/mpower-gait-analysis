@@ -277,7 +277,8 @@ def get_git_used_script_url(path_to_github_token,
         Returns a string of URL to github on executed script
     """
     try:
-        token = open(path_to_github_token, "r").read()
+        with open(os.path.expanduser("~/git_token.txt"), "r+") as f:
+            token = f.read().strip()
         g = Github(token)
         user_name     = g.get_user().login
         head_sha      = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('ascii').strip()
