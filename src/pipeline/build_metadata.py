@@ -88,7 +88,7 @@ def generate_demographic_info(syn, data):
     demo_data_v1 = syn.tableQuery("SELECT age, healthCode, \
                                 inferred_diagnosis as PD,  \
                                 gender FROM {}\
-                                where dataGroups NOT LIKE '%test_user%'".format(data_dict["DEMO_DATA_V1"])).asDataFrame()
+                                where dataGroups NOT LIKE '%test_user%'".format(data_dict["DEMO_DATA_V1"]["synId"])).asDataFrame()
     demo_data_v1 = demo_data_v1[(demo_data_v1["gender"] == "Female") | (demo_data_v1["gender"] == "Male")]
     demo_data_v1 = demo_data_v1.dropna(subset = ["PD"], thresh = 1)                               ## drop if no diagnosis
     demo_data_v1["class"] = demo_data_v1["PD"].map({True :"PD", False:"control"})                 ## encode as numeric binary
@@ -97,9 +97,9 @@ def generate_demographic_info(syn, data):
     ## demographics on ElevateMS ##
     demo_data_ems = syn.tableQuery("SELECT healthCode, dataGroups as MS,\
                                 'gender.json.answer' as gender from {}\
-                                where dataGroups NOT LIKE '%test_user%'".format(data_dict["DEMO_DATA_EMS"])).asDataFrame()
+                                where dataGroups NOT LIKE '%test_user%'".format(data_dict["DEMO_DATA_EMS"]["synId"])).asDataFrame()
     profile_data_ems = syn.tableQuery("SELECT healthCode as healthCode, \
-                                    'demographics.age' as age from {}".format(data_dict["PROFILE_DATA_EMS"])).asDataFrame()
+                                    'demographics.age' as age from {}".format(data_dict["PROFILE_DATA_EMS"]["synId"])).asDataFrame()
     demo_data_ems = pd.merge(demo_data_ems, profile_data_ems, how = "left", on = "healthCode")
     demo_data_ems = demo_data_ems[(demo_data_ems["gender"] == "Male") | (demo_data_ems["gender"] == "Female")]
     demo_data_ems["class"] = demo_data_ems["MS"].map({"ms_patient":"MS", "control":"control"})
@@ -108,7 +108,7 @@ def generate_demographic_info(syn, data):
     ## demographics on mpower version 2 ##
     demo_data_v2 = syn.tableQuery("SELECT birthYear, createdOn, healthCode, \
                                     diagnosis as PD, sex as gender FROM {} \
-                                    where dataGroups NOT LIKE '%test_user%'".format(data_dict["DEMO_DATA_V2"])).asDataFrame()
+                                    where dataGroups NOT LIKE '%test_user%'".format(data_dict["DEMO_DATA_V2"]["synId"])).asDataFrame()
     demo_data_v2        = demo_data_v2[(demo_data_v2["gender"] == "male") | (demo_data_v2["gender"] == "female")]
     demo_data_v2        = demo_data_v2[demo_data_v2["PD"] != "no_answer"]               
     demo_data_v2["class"]  = demo_data_v2["PD"].map({"parkinsons":"PD", "control":"control"})
@@ -151,7 +151,6 @@ def generate_demographic_info(syn, data):
     ## integrity checking ##
     data["phoneInfo"] = data["phoneInfo"].apply(lambda x: x[0] if not isinstance(x,str) else x)
     data = data[data["age"].apply(lambda x: isinstance(x,(int,float)))]
-    data.ix[data["class"]  == "MS", ["age"]] = "#ERROR"
     data["phoneInfo"] = data["phoneInfo"].apply(annot_phone)
     return data
 
