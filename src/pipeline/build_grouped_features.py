@@ -1,3 +1,11 @@
+"""
+
+Author: Sage Bionetworks
+
+Script to group features by healthcodes, with several different aggregation types
+
+"""
+
 ## import future libraries ## 
 from __future__ import print_function
 from __future__ import unicode_literals
@@ -18,9 +26,9 @@ from utils import query_utils as query
 data_dict = {"GAIT_DATA": {"synId": "syn21575055"},
             "GAIT_METADATA": {"synId": "syn21590710"},
             "OUTPUT_INFO"      : {"parent_folder_synId"    : "syn21592268",
-                                    "proj_repo_name"       : "mpower-gait-analysis",
-                                    "path_to_github_token" : "~/git_token.txt"}
-    }
+                                "proj_repo_name"       : "mpower-gait-analysis",
+                                "path_to_github_token" : "~/git_token.txt"}
+            }
 
 syn = sc.login()
 
@@ -55,14 +63,15 @@ def skew(x):
     """
     return x.skew()
 
-def groupby_wrapper(data, group, exclude_columns):
+def groupby_wrapper(data, group, exclude_columns = []):
     """
     Wrapper function to wrap feature data
     into several aggregation function 
     
     Args:
-        data (dtype: pd.Dataframe): featurized data
-        group (dtype: string)     : which group to aggregate
+        data (dtype: pd.Dataframe)   : feature datasets
+        group (dtype: string)        : which group to aggregate
+        exclude_columns (dtype: list): columns to exclude during groupby
     Returns:
         Rtype: pd.Dataframe
         Returns grouped healthcodes features
@@ -83,15 +92,13 @@ def groupby_wrapper(data, group, exclude_columns):
 
 def main():
     gait_data = query.get_file_entity(syn = syn, 
-                                    synid = data_dict["GAIT_DATA"]["synId"])
+                                      synid = data_dict["GAIT_DATA"]["synId"])
+    gait_data    = gait_data[gait_data["error_type"].isnull()]
 
     gait_metadata = query.get_file_entity(syn = syn, 
-                                        synid = data_dict["GAIT_METADATA"]["synId"])
+                                          synid = data_dict["GAIT_METADATA"]["synId"])
 
-    # ## remove this later ##
-    # gait_data = gait_data.drop(['gait_features', 'gait_json_filepath', "window"], axis = 1)
-
-    # gait_data = gait_data.replace(np.inf, np.nan)
+    
 
     metadata = ['appVersion', 'createdOn',
                 'phoneInfo', 'recordId', 

@@ -234,6 +234,10 @@ class GaitFeaturize:
             return np.NaN, np.NaN
         
         else:
+            if (freezeIndex == np.inf) or (freezeIndex == -np.inf):
+                freezeIndex   = np.NaN
+            if (sumLocoFreeze == np.inf) or (sumLocoFreeze == -np.inf):
+                sumLocoFreeze = np.NaN
             return freezeIndex, sumLocoFreeze
 
 

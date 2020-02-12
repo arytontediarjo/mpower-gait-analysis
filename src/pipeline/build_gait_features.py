@@ -26,7 +26,6 @@ import synapseclient as sc
 from utils import query_utils as query
 from utils import gait_features_utils as gf_utils
 
-syn = sc.login()
 
 ## GLOBAL VARIABLES ## 
 data_dict = {"GAIT_MPOWER_V1_TABLE"     : {"synId": "syn10308918", "table_version": "MPOWER_V1"}, 
@@ -38,6 +37,7 @@ data_dict = {"GAIT_MPOWER_V1_TABLE"     : {"synId": "syn10308918", "table_versio
                                             "proj_repo_name"      : "mpower-gait-analysis",
                                             "path_to_github_token": "~/git_token.txt"}
 }
+syn = sc.login()
 
 def read_args():
     """

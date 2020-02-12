@@ -1,4 +1,6 @@
 """
+Author: Sage Bionetworks
+
 Script to gather all Demographics Data from all gait data from Synapse Table
 """
 
@@ -16,7 +18,6 @@ import synapseclient as sc
 
 ## import project modules
 from utils import query_utils as query
-from utils import gait_features_utils as gf_utils
 
 ## global variables ## 
 data_dict = {"GAIT_FEATURE_DATA": {"synId": "syn21575055"},
@@ -61,18 +62,18 @@ def annot_phone(params):
         return "iPhone X"
     return params
 
-def generate_demographic_info(syn, data):
+def generate_demographic_info(syn, feature_data):
     """
-    Function to generate unique healthcode demographic informations from Demographic synapse table.
+    Function to generate unique healthcode demographic informations from Demographic and Profiles synapse table.
     Takes in a dataframe containing healthcode, and join the table and compiled demographic 
     data by their healthcodes.
 
     Cleaning process:
-        >> Annotate controls, PD, MS in one column
-        >> Filter demographic data only if gender value is not unknown
+        >> Annotate controls, PD, MS in a column called class
+        >> Filter healthCode if gender, inferred diagnosis is NULL
         >> Age, if recorded as birthYear will be based on current year - birthYear
         >> healthCodes that has double PD status entry will be dropped from the dataframe
-        >> Age is subsetted between 0-120 years old
+        >> Age is subsetted between 18-120 years old
         >> Aggregation of records for each healthcodes will be based on number of unique record entries,
             other metadata features will be aggregated based on most frequent occurences
 
@@ -125,7 +126,7 @@ def generate_demographic_info(syn, data):
 
     ## filter age ##
     demo_data["age"] = demo_data["age"].apply(lambda x: float(x))
-    demo_data        = demo_data[(demo_data["age"] <= 120) & (demo_data["age"] >= 0)]
+    demo_data        = demo_data[(demo_data["age"] <= 120) & (demo_data["age"] >= 18)]
     demo_data        = demo_data[~demo_data["age"].isin([np.inf, -np.inf])]
     demo_data        = demo_data.sort_values(by = "age", ascending = False)
 
@@ -141,9 +142,10 @@ def generate_demographic_info(syn, data):
         how = "left")
     demo_data = demo_data.drop(["PD", "MS", "birthYear", "createdOn", "has_double_class_entry"], axis = 1)
     demo_data = demo_data.drop_duplicates('healthCode', keep = "first").reset_index(drop = True)
-    
+
     ## merge dataframe with demographic data ##
-    data = pd.merge(data, demo_data, how = "inner", on = "healthCode")
+    ## synId
+    data         = pd.merge(feature_data, demo_data, how = "inner", on = "healthCode")
     
     ## aggregation of metadata features ##
     data= data[["recordId", "healthCode", "phoneInfo", "age", "gender", "class", "table_version"]].groupby(["healthCode"])\
@@ -167,26 +169,30 @@ def main():
     Note: Passive gait data will be separated from active gait data
           as we dont want to combine both in analysis
     """
+    ## get featurized gait data ##
     gait_data    = query.get_file_entity(syn = syn, synid = data_dict["GAIT_FEATURE_DATA"]["synId"])
+    
+    ## filter error data, and separate active and passive data ##
+    gait_data    = gait_data[gait_data["error_type"].isnull()]
     active_data  = gait_data[gait_data["table_version"] != "MPOWER_PASSIVE"]
     passive_data = gait_data[gait_data["table_version"] == "MPOWER_PASSIVE"]
-    active_metadata = generate_demographic_info(syn, active_data)
-    passive_metadata = generate_demographic_info(syn, passive_data)
     
+    output_mapping = {"active_metadata" : generate_demographic_info(syn, active_data), 
+                      "passive_metadata" : generate_demographic_info(syn, passive_data)}
+    
+    ## get this script URL ## 
     used_script_url = query.get_git_used_script_url(path_to_github_token = data_dict["OUTPUT_INFO"]["path_to_github_token"],
                                                     proj_repo_name       = data_dict["OUTPUT_INFO"]["proj_repo_name"],
                                                     script_name          = __file__)
 
     ## save active data to synapse ##
-    for dataframe, filename in zip([active_metadata, passive_metadata], 
-                                [data_dict["OUTPUT_INFO"]["active_metadata_filename"], 
-                                data_dict["OUTPUT_INFO"]["passive_metadata_filename"]]):
+    for data_name, dataframe in output_mapping.items():
         query.save_data_to_synapse(syn = syn,
                                     data = dataframe,
                                     source_table_id = [values["synId"] for key, values in data_dict.items() if key != "OUTPUT_INFO"],
                                     used_script = used_script_url,  
-                                    output_filename = filename,
-                                    data_parent_id  = "syn21537423")
+                                    output_filename = "%s.csv"%data_name,
+                                    data_parent_id  = data_dict["OUTPUT_INFO"]["parent_folder_synId"])
     
 if __name__ ==  '__main__': 
     start_time = time.time()
