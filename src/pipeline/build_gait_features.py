@@ -15,6 +15,7 @@ from __future__ import unicode_literals
 
 # import standard library
 import time
+import gc
 import argparse
 import multiprocessing
 import synapseclient as sc
@@ -181,6 +182,10 @@ def main():
         data = query.parallel_func_apply(
             data, featurize_wrapper, int(args.cores), int(args.partition))
         cleaned_data = normalize_feature_sets(data, "gait_features")
+
+    # clear data from memory
+    del data
+    gc.collect()
 
     # concat data to previously stored data
     cleaned_data = pd.concat(
