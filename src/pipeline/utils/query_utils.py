@@ -112,16 +112,18 @@ def get_walking_synapse_table(syn,
     filepath_data["file_handle_id"] = filepath_data["file_handle_id"].astype(
         float)
 
-    # Join the filehandles with each acceleration files
+    # Join the filehandles with each filepaths
     for feat in column_list:
         data[feat] = data[feat].astype(float)
         data = pd.merge(data, filepath_data,
                         left_on=feat,
                         right_on="file_handle_id",
                         how="left")
-        data = data.rename(columns={feat: "{}_path_id".format(feat),
-                                    "file_path": "{}_pathfile".format(feat)})\
+        data = data.rename(
+          columns={feat: "{}_path_id".format(feat),
+                  "file_path": "{}_pathfile".format(feat)})\
             .drop(["file_handle_id"], axis=1)
+    
     # Empty Filepaths on synapseTable
     cols = [feat for feat in data.columns if "path_id" not in feat]
     return data[cols]
@@ -136,8 +138,7 @@ def save_data_to_synapse(syn,
                          remove=True):
     """
     Utility function to save data to synapse given a parent id,
-    list of used script, and list of source table where the query was sourced
-    TODO: Create some exception here
+    list of used script, and list of source table where the query was sourced.
 
     Args:
         syn                              : synapseclient object
@@ -151,6 +152,7 @@ def save_data_to_synapse(syn,
     Returns:
         Returns stored file entity in Synapse database
     """
+    
     # path to output filename for reference
     path_to_output_filename = os.path.join(os.getcwd(), output_filename)
 
@@ -176,7 +178,7 @@ def save_data_to_synapse(syn,
         os.remove(path_to_output_filename)
 
 
-def normalize_dict_to_column_features(data, features):
+def norm_dict_to_column_features(data, features):
     """
     Utiltiy function to normalize column that contains dictionaries into
     separate columns in the dataframe
@@ -228,9 +230,13 @@ def get_file_entity(syn, synid):
     """
     Utility function to get data (csv,tsv) file entity
     and turn it into pd.DataFrame
+    
     Args:
         syn   : a syn object
         synid : syn id of file entity
+    
+    Returns:
+        Returns a dataframe of the synapse file entity
     """
     entity = syn.get(synid)
     if (".tsv" in entity["name"]):
@@ -251,7 +257,7 @@ def parallel_func_apply(df, func, no_of_processors, chunksize):
          chunksize (dtype: int)         : number of partition
     Returns:
         RType: pd.DataFrame
-        Returns a transformed dataframe from the wrapper apply function
+        Returns a transformed dataframe from the function wrapper
     """
     df_split = np.array_split(df, chunksize)
     print("Currently running on {} processors".format(no_of_processors))
@@ -268,9 +274,9 @@ def check_children(syn, data_parent_id, filename):
     Utility function to check if file is already available
     If file is available, get all the recordIds and all the file
     Args:
-        syn                       : synapseclient object
-        data_parent_id  (string)  : the synId parent folder
-        filename (string)         : the filename being searched
+        syn                            : synapseclient object
+        data_parent_id  (dtype: string): the synId parent folder
+        filename        (dtype: string): the filename being searched
     Returns:
         Previously stored dataframe that has the same filename parameter
     """
