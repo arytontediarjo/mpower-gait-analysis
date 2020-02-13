@@ -226,8 +226,8 @@ def norm_list_dicts_to_rows(data, features):
 
 def get_file_entity(syn, synid):
     """
-    Utility function to get data (csv,tsv) file entity and turn it 
-    into pd.DataFrame
+    Utility function to get data (csv,tsv) file entity
+    and turn it into pd.DataFrame
     Args:
         syn   : a syn object
         synid : syn id of file entity
