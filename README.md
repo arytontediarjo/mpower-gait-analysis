@@ -14,7 +14,7 @@ All functionalities have been encapsulated in a makefile, thus some of the proce
 
 ### 1. Create Python Environment:
 
-#### a. Using Makefile
+#### a. Using Makefile (TODO)
 ```
 make requirements
 ```
