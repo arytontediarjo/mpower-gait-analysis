@@ -33,9 +33,8 @@ data_dict = {
         "proj_repo_name": "mpower-gait-analysis",
         "path_to_github_token": "~/git_token.txt"}
 }
-
 syn = sc.login()
-a = np.arange(start=7, stop=10)
+
 
 
 def iqr(x):
