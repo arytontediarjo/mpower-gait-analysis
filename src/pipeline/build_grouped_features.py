@@ -26,15 +26,21 @@ from utils import query_utils as query
 
 # global variables
 data_dict = {
-    "GAIT_DATA": {"synId": "syn21575055"},
-    "GAIT_METADATA": {"synId": "syn21590710"},
+    "FEATURE DATA": {
+        "MPOWER_V1": "syn21597373",
+        "MPOWER_V2": "syn21597625",
+        "MPOWER_PASSIVE": "syn21597842",
+        "ELEVATE_MS": "syn21597862"},
+    "METADATA": {
+        "ACTIVE_WALKING": "syn21597317",
+        "ACTIVE_BALANCE": "syn21599329",
+        "PASSIVE": "syn21597318"},
     "OUTPUT_INFO": {
-        "parent_folder_synId": "syn21592268",
-        "proj_repo_name": "mpower-gait-analysis",
-        "path_to_github_token": "~/git_token.txt"}
+        "PARENT_FOLDER": "syn21592268",
+        "PROJ_REPO_NAME": "mpower-gait-analysis",
+        "PATH_GITHUB_TOKEN": "~/git_token.txt"}
 }
 syn = sc.login()
-
 
 
 def iqr(x):
@@ -93,61 +99,53 @@ def groupby_wrapper(data, group, exclude_columns=[]):
         Returns grouped healthcodes features
     """
 
-    features = [feat for feat in data.columns if feat not in exclude_columns]
-    data = data[features].groupby(group).agg([np.max,
-                                              np.median,
-                                              np.mean,
-                                              q25, q75,
-                                              valrange, iqr])
+    features_cols = [feat for feat in data.columns if
+                     feat not in exclude_columns]
+    data = data[features_cols].groupby(group).agg([np.max,
+                                                   np.median,
+                                                   np.mean,
+                                                   q25, q75,
+                                                   valrange, iqr])
     feature_cols = []
     for feat, agg in data.columns:
-        feature_cols_name = "{}.{}".format(agg, feat)
+        feature_cols_name = "{}_{}".format(agg, feat)
         feature_cols.append(feature_cols_name)
     data.columns = feature_cols
     return data
 
 
 def main():
-    gait_data = query.get_file_entity(
-        syn=syn,
-        synid=data_dict["GAIT_DATA"]["synId"])
-    gait_data = gait_data[gait_data["error_type"].isnull()]
-    gait_metadata = query.get_file_entity(
-        syn=syn,
-        synid=data_dict["GAIT_METADATA"]["synId"])
-
-    metadata = ['appVersion', 'createdOn',
-                'phoneInfo', 'recordId',
-                'table_version', 'test_type']
-
-    output_mapping = {"walking_active_data":
-                      gait_data[
-                          (gait_data["table_version"] != "MPOWER_PASSIVE")
-                          & (gait_data["test_type"] == "walking")],
-                      "balance_active_data":
-                      gait_data[
-                          (gait_data["table_version"] != "MPOWER_PASSIVE")
-                          & (gait_data["test_type"] != "walking")],
-                      "passive_data":
-                      gait_data[
-                          (gait_data["table_version"] == "MPOWER_PASSIVE")
-                          & (gait_data["test_type"] == "walking")]}
 
     used_script_url = query.get_git_used_script_url(
-        path_to_github_token=data_dict["OUTPUT_INFO"]["path_to_github_token"],
-        proj_repo_name=data_dict["OUTPUT_INFO"]["proj_repo_name"],
+        path_to_github_token=data_dict["OUTPUT_INFO"]["PATH_GITHUB_TOKEN"],
+        proj_repo_name=data_dict["OUTPUT_INFO"]["PROJ_REPO_NAME"],
         script_name=__file__)
 
-    for data_name, dataframe in output_mapping.items():
-        grouped_data = groupby_wrapper(dataframe, "healthCode", metadata)
-        grouped_data = pd.merge(
-            grouped_data, gait_metadata, on="healthCode", how="inner")
-        query.save_data_to_synapse(
-            syn=syn,
-            data=grouped_data,
-            used_script=used_script_url,
-            output_filename="grouped_%s.csv" % data_name,
-            data_parent_id="syn21537421")
+    metadata_cols = ['appVersion', 'createdOn',
+                     'phoneInfo', 'recordId',
+                     'table_version', 'test_type']
+
+    for key, feature_synId in data_dict["FEATURE_DATA"].items():
+        if "PASSIVE" in key:
+            metadata_synId = data_dict["METADATA"]["PASSIVE"]
+        else:
+            metadata_synId = data_dict["METADATA"]["ACTIVE"]
+        metadata = query.get_file_entity(syn, metadata_synId)
+        data = query.get_file_entity(syn, feature_synId)
+        for test_type in data["test_type"].unique():
+            subset = data[data["test_type"] == test_type]
+            subset = groupby_wrapper(subset,
+                                     "healthCode",
+                                     metadata_cols)
+            subset = pd.merge(subset, metadata, on="healthCode", how="inner")
+            query.save_data_to_synapse(
+                syn=syn,
+                data=subset,
+                source_table_id=[feature_synId, metadata_synId],
+                used_script=used_script_url,
+                output_filename=("grouped_%s_%s_features.csv" %
+                                 (key, test_type)).lower(),
+                data_parent_id="syn21537421")
 
 
 if __name__ == '__main__':
