@@ -26,7 +26,7 @@ from utils import query_utils as query
 
 # global variables
 data_dict = {
-    "FEATURE DATA": {
+    "FEATURE_DATA": {
         "MPOWER_V1": "syn21597373",
         "MPOWER_V2": "syn21597625",
         "MPOWER_PASSIVE": "syn21597842",
