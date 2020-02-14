@@ -225,9 +225,8 @@ def main():
         query.save_data_to_synapse(
             syn=syn,
             data=dataframe,
-            source_table_id=[values["synId"] for key,
-                             values in data_dict.items()
-                             if key != "OUTPUT_INFO"],
+            source_table_id=[dataframe["demo_synId"] for key,
+                             dataframe in data_dict["DATA"].items()],
             used_script=used_script_url,
             output_filename="%s.csv" % data_name,
             data_parent_id=data_dict["OUTPUT_INFO"]["parent_folder_synId"])
