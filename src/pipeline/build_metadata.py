@@ -210,7 +210,7 @@ def main():
         (gait_data["test_type"] == "walking")]
     active_balance_data = gait_data[
         (gait_data["table_version"] != "MPOWER_PASSIVE") &
-        (gait_data["test_type"] != "walking")]
+        (gait_data["test_type"] == "balance")]
     passive_data = gait_data[gait_data["table_version"] == "MPOWER_PASSIVE"]
 
     output_mapping = {"active_walking_metadata":
