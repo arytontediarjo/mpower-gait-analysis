@@ -166,7 +166,7 @@ class GaitFeaturize:
         finally:
             return data
 
-    def format_time_series_data(self, data):
+    def _format_time_series_data(self, data):
         """
         Utility function to format time series
 
@@ -203,7 +203,7 @@ class GaitFeaturize:
         data = data.sort_index()
         return data[["td", "x", "y", "z", "AA"]]
 
-    def calculate_freeze_index(self, accel_series, sample_rate):
+    def _calculate_freeze_index(self, accel_series, sample_rate):
         """
         Modified pdkit FoG freeze index function to be compatible with
         current data gait pipeline
@@ -300,7 +300,7 @@ class GaitFeaturize:
                 start = crossing
         return rotation_dict
 
-    def split_gait_dataframe_to_chunks(self, accel_dataframe, periods):
+    def _split_gait_dataframe_to_chunks(self, accel_dataframe, periods):
         """
         Function to chunk dataframe into several periods of rotational
         and non-rotational sequences into List.
@@ -363,9 +363,9 @@ class GaitFeaturize:
                  "chunk": "walk_chunk_%s" % num_walk_window})
         return chunk_list
 
-    def featurize_gait_dataframe_chunks_by_window(self,
-                                                  list_of_dataframe_dicts,
-                                                  rotation_dict):
+    def _featurize_gait_dataframe_chunks_by_window(self,
+                                                   list_of_dataframe_dicts,
+                                                   rotation_dict):
         """
         Function to featurize list of rotation-segmented dataframe chunks with
         moving windows, and returns list of dictionary with all the pdkit
@@ -401,8 +401,7 @@ class GaitFeaturize:
 
         feature_list = []
         num_window = 1
-        step_size = self.window_size * self.window_overlap
-
+        step_size = int(self.window_size * self.window_overlap)
         # separate to rotation and non rotation
         for dataframe_dict in list_of_dataframe_dicts:
             end_window_pointer = self.window_size
@@ -439,7 +438,6 @@ class GaitFeaturize:
                 feature_list.append(feature_dict)
                 end_window_pointer += step_size
                 num_window += 1
-
         return feature_list
 
     def get_pdkit_gait_features(self, accel_dataframe):
@@ -534,7 +532,7 @@ class GaitFeaturize:
 
             speed_of_gait = gp.speed_of_gait(series, wavelet_level=6)
             energy_freeze_index, \
-                locomotor_freeze_index = self.calculate_freeze_index(
+                locomotor_freeze_index = self._calculate_freeze_index(
                     series, self.sampling_frequency)
 
             feature_dict["%s_steps" % axis] = steps
@@ -555,7 +553,7 @@ class GaitFeaturize:
         feature_dict["window_size"] = window_duration
         return feature_dict
 
-    def resample_signal(self, dataframe):
+    def _resample_signal(self, dataframe):
         """
         Utility method for data resampling,
         Data will be interpolated using linear method
@@ -594,13 +592,13 @@ class GaitFeaturize:
             return accel_data
         if not (isinstance(rotation_data, pd.DataFrame)):
             return rotation_data
-        resampled_rotation = self.resample_signal(rotation_data)
-        resampled_accel = self.resample_signal(accel_data)
+        resampled_rotation = self._resample_signal(rotation_data)
+        resampled_accel = self._resample_signal(accel_data)
         rotation_dict = self.get_gait_rotation_info(resampled_rotation)
         periods = [v["period"] for k, v in rotation_dict.items()]
-        list_df_chunks = self.split_gait_dataframe_to_chunks(
+        list_df_chunks = self._split_gait_dataframe_to_chunks(
             resampled_accel, periods)
         list_of_feature_dictionary = \
-            self.featurize_gait_dataframe_chunks_by_window(
+            self._featurize_gait_dataframe_chunks_by_window(
                 list_df_chunks, rotation_dict)
         return list_of_feature_dictionary
