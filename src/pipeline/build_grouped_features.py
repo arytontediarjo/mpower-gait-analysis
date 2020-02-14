@@ -32,8 +32,7 @@ data_dict = {
         "MPOWER_PASSIVE": "syn21597842",
         "ELEVATE_MS": "syn21597862"},
     "METADATA": {
-        "ACTIVE_WALKING": "syn21597317",
-        "ACTIVE_BALANCE": "syn21599329",
+        "ACTIVE": "syn21599370",
         "PASSIVE": "syn21597318"},
     "OUTPUT_INFO": {
         "PARENT_FOLDER": "syn21592268",
