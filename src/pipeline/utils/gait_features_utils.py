@@ -151,22 +151,9 @@ class GaitFeaturize:
                     data["y"] = data[sensor].apply(lambda x: x["y"])
                     data["z"] = data[sensor].apply(lambda x: x["z"])
                     data = data.drop([sensor], axis=1)
-
         # exceptions during data reading
-        except AttributeError as err:
+        except (AttributeError, TypeError, FileNotFoundError, MemoryError, KeyError) as err:
             data = "ERROR: %s" % type(err).__name__
-        except TypeError as err:
-            data = "ERROR: %s" % type(err).__name__
-        except FileNotFoundError as err:
-            data = "ERROR: %s" % type(err).__name__
-        except TypeError as err:
-            data = "ERROR: %s" % type(err).__name__
-        except MemoryError as err:
-            data = "ERROR: %s" % type(err).__name__
-        except KeyError as err:
-            data = "ERROR: %s" % type(err).__name__
-        except Exception as err:
-            raise(err)
         else:
             # check if empty
             if data.empty:
