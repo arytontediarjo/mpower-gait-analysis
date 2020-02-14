@@ -16,6 +16,7 @@ from __future__ import unicode_literals
 # import standard library
 import time
 import gc
+from memory_profiler import profile
 import argparse
 import multiprocessing
 import synapseclient as sc
@@ -35,8 +36,7 @@ data_dict = {"GAIT_MPOWER_V1_TABLE": {"synId": "syn10308918",
                                            "table_version": "MPOWER_PASSIVE"},
              "GAIT_EMS_TABLE": {"synId": "syn10278766",
                                 "table_version": "ELEVATE_MS"},
-             "OUTPUT_INFO": {"featurized_data": "featurized_gait_data.csv",
-                             "parent_folder_synId": "syn21537420",
+             "OUTPUT_INFO": {"parent_folder_synId": "syn21537420",
                              "proj_repo_name": "mpower-gait-analysis",
                              "git_token_path": "~/git_token.txt"}
              }
@@ -160,47 +160,50 @@ def normalize_feature_sets(data, target_feature):
     return data
 
 
+@profile
 def main():
     args = read_args()
-    data = pd.concat([standardize_mpower_data(values) for key,
-                      values in data_dict.items()
-                      if key != "OUTPUT_INFO"]).reset_index(drop=True)
+    all_data = pd.concat([standardize_mpower_data(values) for key,
+                          values in data_dict.items()
+                          if key != "OUTPUT_INFO"]).reset_index(drop=True)
 
-    # instantiate empty dataframes
-    prev_stored_data = pd.DataFrame()
-    cleaned_data = pd.DataFrame()
-    if args.update:
-        prev_stored_data = query.check_children(
+    # Iteratively save data in different tables, join after in synapse
+    # Garbage collect the data so that it does not overload
+    for version in all_data["table_version"].unique():
+        data = all_data[all_data["table_version"] == version]
+        prev_stored_data = pd.DataFrame()
+        if args.update:
+            prev_stored_data = query.check_children(
+                syn=syn,
+                data_parent_id=data_dict["OUTPUT_INFO"]["parent_folder_synId"],
+                filename="%s_gait_features.csv" % version)
+            data = data[~data["recordId"].isin(
+                prev_stored_data["recordId"].unique())]
+        # featurize data if not empty
+        if not data.empty:
+            data = query.parallel_func_apply(
+                data, featurize_wrapper, int(args.cores), int(args.partition))
+            data = normalize_feature_sets(data, "gait_features")
+
+        # concat data to previously stored data
+        data = pd.concat([prev_stored_data, data])\
+            .reset_index(drop=True)
+        query.save_data_to_synapse(
             syn=syn,
-            data_parent_id=data_dict["OUTPUT_INFO"]["parent_folder_synId"],
-            filename=data_dict["OUTPUT_INFO"]["featurized_data"])
-        data = data[~data["recordId"].isin(
-            prev_stored_data["recordId"].unique())]
+            data=data,
+            used_script=query.get_git_used_script_url(
+                path_to_github_token=data_dict["OUTPUT_INFO"]["git_token_path"],
+                proj_repo_name=data_dict["OUTPUT_INFO"]["proj_repo_name"],
+                script_name=__file__),
+            source_table_id=[values["synId"] for key,
+                             values in data_dict.items()
+                             if key != "OUTPUT_INFO"],
+            output_filename="%s_gait_features.csv" % version,
+            data_parent_id=data_dict["OUTPUT_INFO"]["parent_folder_synId"])
 
-    # featurize data if not empty
-    if not data.empty:
-        data = query.parallel_func_apply(
-            data, featurize_wrapper, int(args.cores), int(args.partition))
-        cleaned_data = normalize_feature_sets(data, "gait_features")
-
-    # clear data from memory
-    del data
-    gc.collect()
-
-    # concat data to previously stored data
-    cleaned_data = pd.concat(
-        [prev_stored_data, cleaned_data]).reset_index(drop=True)
-    query.save_data_to_synapse(
-        syn=syn,
-        data=cleaned_data,
-        used_script=query.get_git_used_script_url(
-            path_to_github_token=data_dict["OUTPUT_INFO"]["git_token_path"],
-            proj_repo_name=data_dict["OUTPUT_INFO"]["proj_repo_name"],
-            script_name=__file__),
-        source_table_id=[values["synId"] for key,
-                         values in data_dict.items() if key != "OUTPUT_INFO"],
-        output_filename=data_dict["OUTPUT_INFO"]["featurized_data"],
-        data_parent_id=data_dict["OUTPUT_INFO"]["parent_folder_synId"])
+        # clear data from memory
+        del data
+        gc.collect()
 
 
 if __name__ == '__main__':
