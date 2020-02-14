@@ -204,13 +204,19 @@ def main():
     gait_data = pd.concat([query.get_file_entity(
         syn, dataframe["feature_synId"])
         for key, dataframe in data_dict["DATA"].items()])
-    # filter error data, and separate active and passive data
     gait_data = gait_data[gait_data["error_type"].isnull()]
-    active_data = gait_data[gait_data["table_version"] != "MPOWER_PASSIVE"]
+    active_walking_data = gait_data[
+        (gait_data["table_version"] != "MPOWER_PASSIVE") &
+        (gait_data["test_type"] == "walking")]
+    active_balance_data = gait_data[
+        (gait_data["table_version"] != "MPOWER_PASSIVE") &
+        (gait_data["test_type"] != "walking")]
     passive_data = gait_data[gait_data["table_version"] == "MPOWER_PASSIVE"]
 
-    output_mapping = {"active_metadata":
-                      generate_demographic_info(syn, active_data),
+    output_mapping = {"active_walking_metadata":
+                      generate_demographic_info(syn, active_walking_data),
+                      "active_balance_metadata":
+                      generate_demographic_info(syn, active_balance_data),
                       "passive_metadata":
                       generate_demographic_info(syn, passive_data)}
 
