@@ -21,11 +21,15 @@ from utils import query_utils as query
 
 # global variables
 data_dict = {
-    "GAIT_FEATURE_DATA": {"synId": "syn21575055"},
-    "DEMO_DATA_V1": {"synId": "syn10371840"},
-    "DEMO_DATA_V2": {"synId": "syn15673379"},
-    "DEMO_DATA_EMS": {"synId": "syn10295288"},
-    "PROFILE_DATA_EMS": {"synId": "syn10235463"},
+    "DATA": {"MPOWER_V1": {"feature_synId": "syn21597373",
+                           "demo_synId": "syn10371840"},
+             "MPOWER_V2": {"feature_synId": "syn21597625",
+                           "demo_synId": "syn15673379"},
+             "MPOWER_PASSIVE": {"feature_synId": "syn21597842",
+                                "demo_synId": "syn15673379"},
+             "ELEVATE_MS": {"feature_synId": "syn21597862",
+                            "demo_synId": "syn10295288",
+                            "profile_synId": "syn10235463"}},
     "OUTPUT_INFO": {
         "active_metadata_filename": "active_gait_metadata.csv",
         "passive_metadata_filename": "passive_gait_metadata.csv",
@@ -100,7 +104,7 @@ def generate_demographic_info(syn, feature_data):
         inferred_diagnosis as PD, gender \
         FROM {} where dataGroups \
         NOT LIKE '%test_user%'"
-        .format(data_dict["DEMO_DATA_V1"]["synId"])).asDataFrame()
+        .format(data_dict["DATA"]["MPOWER_V1"]["demo_synId"])).asDataFrame()
     demo_data_v1 = demo_data_v1.dropna(subset=["PD"], thresh=1)
     demo_data_v1["class"] = demo_data_v1["PD"].map(
         {True: "PD", False: "control"})
@@ -110,11 +114,13 @@ def generate_demographic_info(syn, feature_data):
         "SELECT healthCode, dataGroups as MS,\
         'gender.json.answer' as gender from {}\
         where dataGroups NOT LIKE '%test_user%'"
-        .format(data_dict["DEMO_DATA_EMS"]["synId"])).asDataFrame()
+        .format(data_dict["DATA"]["ELEVATE_MS"]["demo_synId"]))\
+        .asDataFrame()
     profile_data_ems = syn.tableQuery(
         "SELECT healthCode as healthCode, \
         'demographics.age' as age from {}"
-        .format(data_dict["PROFILE_DATA_EMS"]["synId"])).asDataFrame()
+        .format(data_dict["DATA"]["ELEVATE_MS"]["profile_synId"]))\
+        .asDataFrame()
     demo_data_ems = pd.merge(
         demo_data_ems, profile_data_ems, how="inner", on="healthCode")
     demo_data_ems["class"] = demo_data_ems["MS"].map(
@@ -125,7 +131,7 @@ def generate_demographic_info(syn, feature_data):
         "SELECT birthYear, createdOn, healthCode, \
         diagnosis as PD, sex as gender FROM {} \
         where dataGroups NOT LIKE '%test_user%'"
-        .format(data_dict["DEMO_DATA_V2"]["synId"])).asDataFrame()
+        .format(data_dict["DATA"]["MPOWER_V2"]["demo_synId"])).asDataFrame()
     demo_data_v2 = demo_data_v2[demo_data_v2["PD"] != "no_answer"]
     demo_data_v2["class"] = demo_data_v2["PD"].map(
         {"parkinsons": "PD", "control": "control"})
@@ -194,10 +200,10 @@ def main():
     Note: Passive gait data will be separated from active gait data
           as we dont want to combine both in analysis
     """
-    # get featurized gait data
-    gait_data = query.get_file_entity(
-        syn=syn, synid=data_dict["GAIT_FEATURE_DATA"]["synId"])
 
+    gait_data = pd.concat([query.get_file_entity(
+        syn, dataframe["feature_synId"])
+        for key, dataframe in data_dict["DATA"].items()])
     # filter error data, and separate active and passive data
     gait_data = gait_data[gait_data["error_type"].isnull()]
     active_data = gait_data[gait_data["table_version"] != "MPOWER_PASSIVE"]

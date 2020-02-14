@@ -16,7 +16,6 @@ from __future__ import unicode_literals
 # import standard library
 import time
 import gc
-from memory_profiler import profile
 import argparse
 import multiprocessing
 import synapseclient as sc
@@ -28,14 +27,14 @@ from utils import gait_features_utils as gf_utils
 
 
 # GLOBAL VARIABLES
-data_dict = {"GAIT_MPOWER_V1_TABLE": {"synId": "syn10308918",
-                                      "table_version": "MPOWER_V1"},
-             "GAIT_MPOWER_V2_TABLE": {"synId": "syn12514611",
-                                      "table_version": "MPOWER_V2"},
-             "GAIT_MPOWER_PASSIVE_TABLE": {"synId": "syn17022539",
-                                           "table_version": "MPOWER_PASSIVE"},
-             "GAIT_EMS_TABLE": {"synId": "syn10278766",
-                                "table_version": "ELEVATE_MS"},
+data_dict = {"MPOWER_V1": {"synId": "syn10308918",
+                           "table_version": "MPOWER_V1"},
+             "MPOWER_V2": {"synId": "syn12514611",
+                           "table_version": "MPOWER_V2"},
+             "MPOWER_PASSIVE": {"synId": "syn17022539",
+                                "table_version": "MPOWER_PASSIVE"},
+             "ELEVATE_MS": {"synId": "syn10278766",
+                            "table_version": "ELEVATE_MS"},
              "OUTPUT_INFO": {"parent_folder_synId": "syn21537420",
                              "proj_repo_name": "mpower-gait-analysis",
                              "git_token_path": "~/git_token.txt"}
@@ -160,7 +159,6 @@ def normalize_feature_sets(data, target_feature):
     return data
 
 
-@profile
 def main():
     args = read_args()
     all_data = pd.concat([standardize_mpower_data(values) for key,
@@ -195,9 +193,7 @@ def main():
                 path_to_github_token=data_dict["OUTPUT_INFO"]["git_token_path"],
                 proj_repo_name=data_dict["OUTPUT_INFO"]["proj_repo_name"],
                 script_name=__file__),
-            source_table_id=[values["synId"] for key,
-                             values in data_dict.items()
-                             if key != "OUTPUT_INFO"],
+            source_table_id=data_dict[version]["synId"],
             output_filename="%s_gait_features.csv" % version,
             data_parent_id=data_dict["OUTPUT_INFO"]["parent_folder_synId"])
 
