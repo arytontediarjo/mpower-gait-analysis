@@ -110,13 +110,11 @@ def generate_gait_metadata(syn):
         "SELECT healthCode, dataGroups as MS,\
         'gender.json.answer' as gender from {}\
         where dataGroups NOT LIKE '%test_user%'"
-        .format(data_dict["METADATA"]["ELEVATE_MS_DEMO"]
-                ["demo_synId"])).asDataFrame()
+        .format(data_dict["METADATA"]["ELEVATE_MS_DEMO"])).asDataFrame()
     profile_data_ems = syn.tableQuery(
         "SELECT healthCode as healthCode, \
         'demographics.age' as age from {}"
-        .format(data_dict["METADATA"]["ELEVATE_MS_PROF"]
-                ["profile_synId"])).asDataFrame()
+        .format(data_dict["METADATA"]["ELEVATE_MS_PROF"])).asDataFrame()
     demo_data_ems = pd.merge(
         demo_data_ems, profile_data_ems, how="inner", on="healthCode")
     demo_data_ems["class"] = demo_data_ems["MS"].map(
