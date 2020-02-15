@@ -124,7 +124,7 @@ def groupby_wrapper(data, group, metadata_columns=[]):
     """
     # groupby features based on several aggregation
     feature_cols = [feat for feat in data.columns if
-                    feat not in metadata_columns]
+                    (feat not in metadata_columns) or (feat == "healthCode")]
     feature_data = data[feature_cols].groupby(group).agg([np.max,
                                                           np.median,
                                                           np.mean,
@@ -137,14 +137,16 @@ def groupby_wrapper(data, group, metadata_columns=[]):
     feature_data.columns = feature_cols
 
     # groupby metadata based on modes
-    metadata_columns.append("healthCode")
     metadata = data[metadata_columns]\
         .groupby(["healthCode"])\
         .agg({"recordId": pd.Series.nunique,
               "phoneInfo": pd.Series.mode,
               "table_version": pd.Series.mode,
-              "class": pd.Series.mode})
+              "test_type": pd.Series.mode})
     metadata = metadata.rename({"recordId": "nrecords"}, axis=1)
+    data["phoneInfo"] = data["phoneInfo"].apply(
+         lambda x: x[0] if not isinstance(x, str) else x)
+    data["phoneInfo"] = data["phoneInfo"].apply(annot_phone)
 
     # index join on aggregated feature and metadata
     data = feature_data.join(metadata, on="healthCode")
@@ -161,7 +163,7 @@ def main():
     metadata_cols = ['appVersion', 'createdOn',
                      'phoneInfo', 'recordId',
                      'table_version', 'test_type',
-                     'error_type']
+                     'error_type', "healthCode"]
     demo_data = query.get_file_entity(syn, data_dict["DEMOGRAPHIC_DATA_SYNID"])
     for key, synId in data_dict["FEATURE_DATA_SYNIDS"].items():
         data = query.get_file_entity(syn, synId)

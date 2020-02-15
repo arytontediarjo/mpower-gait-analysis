@@ -28,7 +28,7 @@ data_dict = {
         "ELEVATE_MS_DEMO": "syn10295288",
         "ELEVATE_MS_PROF": "syn10235463"},
     "OUTPUT_INFO": {
-        "metadata_filename": "active_gait_metadata.csv",
+        "metadata_filename": "gait_metadata.csv",
         "parent_folder_synId": "syn21537423",
         "proj_repo_name": "mpower-gait-analysis",
         "path_to_github_token": "~/git_token.txt"}
