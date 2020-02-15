@@ -21,18 +21,14 @@ from utils import query_utils as query
 
 # global variables
 data_dict = {
-    "DATA": {"MPOWER_V1": {"feature_synId": "syn21597373",
-                           "demo_synId": "syn10371840"},
-             "MPOWER_V2": {"feature_synId": "syn21597625",
-                           "demo_synId": "syn15673379"},
-             "MPOWER_PASSIVE": {"feature_synId": "syn21597842",
-                                "demo_synId": "syn15673379"},
-             "ELEVATE_MS": {"feature_synId": "syn21597862",
-                            "demo_synId": "syn10295288",
-                            "profile_synId": "syn10235463"}},
+    "METADATA": {
+        "MPOWER_V1": "syn10371840",
+        "MPOWER_V2": "syn15673379",
+        "MPOWER_PASSIVE": "syn15673379",
+        "ELEVATE_MS": {"demo_synId": "syn10295288",
+                       "profile_synId": "syn10235463"}},
     "OUTPUT_INFO": {
-        "active_metadata_filename": "active_gait_metadata.csv",
-        "passive_metadata_filename": "passive_gait_metadata.csv",
+        "metadata_filename": "active_gait_metadata.csv",
         "parent_folder_synId": "syn21537423",
         "proj_repo_name": "mpower-gait-analysis",
         "path_to_github_token": "~/git_token.txt"}
@@ -68,7 +64,7 @@ def annot_phone(params):
     return params
 
 
-def generate_demographic_info(syn, feature_data):
+def generate_gait_metadata(syn):
     """
     Function to generate healthcode demographic informations
     from Demographic and Profiles synapse table.
@@ -104,7 +100,7 @@ def generate_demographic_info(syn, feature_data):
         inferred_diagnosis as PD, gender \
         FROM {} where dataGroups \
         NOT LIKE '%test_user%'"
-        .format(data_dict["DATA"]["MPOWER_V1"]["demo_synId"])).asDataFrame()
+        .format(data_dict["METADATA"]["MPOWER_V1"])).asDataFrame()
     demo_data_v1 = demo_data_v1.dropna(subset=["PD"], thresh=1)
     demo_data_v1["class"] = demo_data_v1["PD"].map(
         {True: "PD", False: "control"})
@@ -114,12 +110,12 @@ def generate_demographic_info(syn, feature_data):
         "SELECT healthCode, dataGroups as MS,\
         'gender.json.answer' as gender from {}\
         where dataGroups NOT LIKE '%test_user%'"
-        .format(data_dict["DATA"]["ELEVATE_MS"]["demo_synId"]))\
+        .format(data_dict["METADATA"]["ELEVATE_MS"]))\
         .asDataFrame()
     profile_data_ems = syn.tableQuery(
         "SELECT healthCode as healthCode, \
         'demographics.age' as age from {}"
-        .format(data_dict["DATA"]["ELEVATE_MS"]["profile_synId"]))\
+        .format(data_dict["METADATA"]["ELEVATE_MS"]))\
         .asDataFrame()
     demo_data_ems = pd.merge(
         demo_data_ems, profile_data_ems, how="inner", on="healthCode")
@@ -131,7 +127,7 @@ def generate_demographic_info(syn, feature_data):
         "SELECT birthYear, createdOn, healthCode, \
         diagnosis as PD, sex as gender FROM {} \
         where dataGroups NOT LIKE '%test_user%'"
-        .format(data_dict["DATA"]["MPOWER_V2"]["demo_synId"])).asDataFrame()
+        .format(data_dict["METADATA"]["MPOWER_V2"])).asDataFrame()
     demo_data_v2 = demo_data_v2[demo_data_v2["PD"] != "no_answer"]
     demo_data_v2["class"] = demo_data_v2["PD"].map(
         {"parkinsons": "PD", "control": "control"})
@@ -171,26 +167,26 @@ def generate_demographic_info(syn, feature_data):
     demo_data = demo_data.drop_duplicates(
         'healthCode', keep="first").reset_index(drop=True)
 
-    # merge dataframe with demographic data
+    # # merge dataframe with demographic data
 
-    data = pd.merge(feature_data, demo_data, how="inner", on="healthCode")
+    # data = pd.merge(feature_data, demo_data, how="inner", on="healthCode")
 
-    # aggregation of metadata features
-    data = data[["recordId", "healthCode", "phoneInfo", "age",
-                 "gender", "class", "table_version"]].groupby(["healthCode"])\
-        .agg({"recordId": pd.Series.nunique,
-              "phoneInfo": pd.Series.mode,
-              "class": pd.Series.mode,
-              "gender": pd.Series.mode,
-              "age": pd.Series.mode,
-              "table_version": pd.Series.mode})
-    data = data.rename({"recordId": "nrecords"}, axis=1)
+    # # aggregation of metadata features
+    # data = data[["recordId", "healthCode", "phoneInfo", "age",
+    #              "gender", "class", "table_version"]].groupby(["healthCode"])\
+    #     .agg({"recordId": pd.Series.nunique,
+    #           "phoneInfo": pd.Series.mode,
+    #           "class": pd.Series.mode,
+    #           "gender": pd.Series.mode,
+    #           "age": pd.Series.mode,
+    #           "table_version": pd.Series.mode})
+    # data = data.rename({"recordId": "nrecords"}, axis=1)
 
-    # annotate phone into simpler categories
-    data["phoneInfo"] = data["phoneInfo"].apply(
-        lambda x: x[0] if not isinstance(x, str) else x)
-    data["phoneInfo"] = data["phoneInfo"].apply(annot_phone)
-    return data
+    # # annotate phone into simpler categories
+    # data["phoneInfo"] = data["phoneInfo"].apply(
+    #     lambda x: x[0] if not isinstance(x, str) else x)
+    # data["phoneInfo"] = data["phoneInfo"].apply(annot_phone)
+    return demo_data
 
 
 def main():
@@ -201,16 +197,7 @@ def main():
           as we dont want to combine both in analysis
     """
 
-    gait_data = pd.concat([query.get_file_entity(
-        syn, dataframe["feature_synId"])
-        for key, dataframe in data_dict["DATA"].items()])
-    gait_data = gait_data[gait_data["error_type"].isnull()]
-    active_data = gait_data[(gait_data["table_version"] != "MPOWER_PASSIVE")]
-    passive_data = gait_data[gait_data["table_version"] == "MPOWER_PASSIVE"]
-    output_mapping = {"active_metadata":
-                      generate_demographic_info(syn, active_data),
-                      "passive_metadata":
-                      generate_demographic_info(syn, passive_data)}
+    metadata = generate_gait_metadata(syn)
 
     # get this script git blob URL
     used_script_url = query.get_git_used_script_url(
@@ -218,16 +205,14 @@ def main():
         proj_repo_name=data_dict["OUTPUT_INFO"]["proj_repo_name"],
         script_name=__file__)
 
-    # save active data to synapse
-    for data_name, dataframe in output_mapping.items():
-        query.save_data_to_synapse(
-            syn=syn,
-            data=dataframe,
-            source_table_id=[dataframe["demo_synId"] for key,
-                             dataframe in data_dict["DATA"].items()],
-            used_script=used_script_url,
-            output_filename="%s.csv" % data_name,
-            data_parent_id=data_dict["OUTPUT_INFO"]["parent_folder_synId"])
+    query.save_data_to_synapse(
+        syn=syn,
+        data=metadata,
+        source_table_id=[dataframe["demo_synId"]
+                         for key, dataframe in data_dict["DATA"].items()],
+        used_script=used_script_url,
+        output_filename=data_dict["OUTPUT_INFO"]["metadata_filename"],
+        data_parent_id=data_dict["OUTPUT_INFO"]["parent_folder_synId"])
 
 
 if __name__ == '__main__':
