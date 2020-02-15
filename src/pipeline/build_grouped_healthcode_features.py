@@ -145,12 +145,12 @@ def groupby_wrapper(data, group, metadata_columns=[]):
               "test_type": pd.Series.mode})
     metadata = metadata.rename({"recordId": "nrecords"}, axis=1)
     data["phoneInfo"] = data["phoneInfo"].apply(
-         lambda x: x[0] if not isinstance(x, str) else x)
+        lambda x: x[0] if not isinstance(x, str) else x)
     data["phoneInfo"] = data["phoneInfo"].apply(annot_phone)
 
     # index join on aggregated feature and metadata
     data = feature_data.join(metadata, on="healthCode")
-    return data
+    return data.reset_index()
 
 
 def main():

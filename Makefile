@@ -19,11 +19,11 @@ requirements: test_environment
 data: 
 	$(PYTHON_INTERPRETER) src/pipeline/build_gait_features.py 
 
-metadata:
-	$(PYTHON_INTERPRETER) src/pipeline/build_metadata.py
+demographics:
+	$(PYTHON_INTERPRETER) src/pipeline/build_demographics.py
 
-group:
-	$(PYTHON_INTERPRETER) src/pipeline/build_grouped_features.py
+aggregate:
+	$(PYTHON_INTERPRETER) src/pipeline/build_grouped_healthcode_features.py
 
 ## Update dataset only based on new recordId
 update:

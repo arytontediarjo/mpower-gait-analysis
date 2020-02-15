@@ -24,7 +24,6 @@ data_dict = {
     "METADATA": {
         "MPOWER_V1": "syn10371840",
         "MPOWER_V2": "syn15673379",
-        "MPOWER_PASSIVE": "syn15673379",
         "ELEVATE_MS_DEMO": "syn10295288",
         "ELEVATE_MS_PROF": "syn10235463"},
     "OUTPUT_INFO": {
@@ -36,35 +35,7 @@ data_dict = {
 syn = sc.login()
 
 
-def annot_phone(params):
-    """
-    Function to have more concrete phone types
-
-    Args:
-        params (type: string): raw phone information
-
-    Returns:
-        Rtype: String
-        Returns an annotated dataset with lesser choice of phone information
-    """
-    if ";" in params:
-        params = params.split(";")[0]
-    if ("iPhone 6+" in params) or ("iPhone 6 Plus" in params):
-        return "iPhone 6+"
-    elif ("Unknown" in params) or ("iPad" in params) or ("iPod" in params):
-        return "Other iPhone"
-    elif ("iPhone 5" in params) or ("iPhone5" in params):
-        return "iPhone 5"
-    elif ("iPhone8" in params) or ("iPhone 8" in params):
-        return "iPhone 8"
-    elif ("iPhone9" in params) or ("iPhone 9" in params):
-        return "iPhone 9"
-    elif ("iPhone X" in params) or ("iPhone10" in params):
-        return "iPhone X"
-    return params
-
-
-def generate_gait_metadata(syn):
+def generate_gait_demographic(syn):
     """
     Function to generate healthcode demographic informations
     from Demographic and Profiles synapse table.
@@ -100,21 +71,25 @@ def generate_gait_metadata(syn):
         inferred_diagnosis as PD, gender \
         FROM {} where dataGroups \
         NOT LIKE '%test_user%'"
-        .format(data_dict["METADATA"]["MPOWER_V1"])).asDataFrame()
-    demo_data_v1 = demo_data_v1.dropna(subset=["PD"], thresh=1)
-    demo_data_v1["class"] = demo_data_v1["PD"].map(
-        {True: "PD", False: "control"})
+        .format(data_dict["METADATA"]["MPOWER_V1"]))\
+        .asDataFrame()
+    demo_data_v1 = demo_data_v1\
+        .dropna(subset=["PD"], thresh=1)
+    demo_data_v1["class"] = demo_data_v1["PD"]\
+        .map({True: "PD", False: "control"})
 
     # demographics on ElevateMS
     demo_data_ems = syn.tableQuery(
         "SELECT healthCode, dataGroups as MS,\
         'gender.json.answer' as gender from {}\
         where dataGroups NOT LIKE '%test_user%'"
-        .format(data_dict["METADATA"]["ELEVATE_MS_DEMO"])).asDataFrame()
+        .format(data_dict["METADATA"]["ELEVATE_MS_DEMO"]))\
+        .asDataFrame()
     profile_data_ems = syn.tableQuery(
         "SELECT healthCode as healthCode, \
         'demographics.age' as age from {}"
-        .format(data_dict["METADATA"]["ELEVATE_MS_PROF"])).asDataFrame()
+        .format(data_dict["METADATA"]["ELEVATE_MS_PROF"]))\
+        .asDataFrame()
     demo_data_ems = pd.merge(
         demo_data_ems, profile_data_ems, how="inner", on="healthCode")
     demo_data_ems["class"] = demo_data_ems["MS"].map(
@@ -127,13 +102,14 @@ def generate_gait_metadata(syn):
         where dataGroups NOT LIKE '%test_user%'"
         .format(data_dict["METADATA"]["MPOWER_V2"])).asDataFrame()
     demo_data_v2 = demo_data_v2[demo_data_v2["PD"] != "no_answer"]
-    demo_data_v2["class"] = demo_data_v2["PD"].map(
-        {"parkinsons": "PD", "control": "control"})
-    demo_data_v2["birthYear"] = demo_data_v2[demo_data_v2["birthYear"].apply(
-        lambda x: True if x >= 0 else False)]
-    demo_data_v2["age"] = pd.to_datetime(
-        demo_data_v2["createdOn"], unit="ms").dt.year
-    - demo_data_v2["birthYear"]
+    demo_data_v2["class"] = demo_data_v2["PD"]\
+        .map({"parkinsons": "PD", "control": "control"})
+    demo_data_v2["birthYear"] = demo_data_v2[demo_data_v2["birthYear"]
+                                             .apply(lambda x: True if x >= 0
+                                                    else False)]
+    demo_data_v2["age"] =\
+        pd.to_datetime(demo_data_v2["createdOn"],
+                       unit="ms").dt.year - demo_data_v2["birthYear"]
 
     # concatenate all demographic data
     demo_data = pd.concat(
@@ -164,26 +140,6 @@ def generate_gait_metadata(syn):
          "createdOn", "has_double_class_entry"], axis=1)
     demo_data = demo_data.drop_duplicates(
         'healthCode', keep="first").reset_index(drop=True)
-
-    # # merge dataframe with demographic data
-
-    # data = pd.merge(feature_data, demo_data, how="inner", on="healthCode")
-
-    # # aggregation of metadata features
-    # data = data[["recordId", "healthCode", "phoneInfo", "age",
-    #              "gender", "class", "table_version"]].groupby(["healthCode"])\
-    #     .agg({"recordId": pd.Series.nunique,
-    #           "phoneInfo": pd.Series.mode,
-    #           "class": pd.Series.mode,
-    #           "gender": pd.Series.mode,
-    #           "age": pd.Series.mode,
-    #           "table_version": pd.Series.mode})
-    # data = data.rename({"recordId": "nrecords"}, axis=1)
-
-    # # annotate phone into simpler categories
-    # data["phoneInfo"] = data["phoneInfo"].apply(
-    #     lambda x: x[0] if not isinstance(x, str) else x)
-    # data["phoneInfo"] = data["phoneInfo"].apply(annot_phone)
     return demo_data
 
 
@@ -195,7 +151,7 @@ def main():
           as we dont want to combine both in analysis
     """
 
-    metadata = generate_gait_metadata(syn)
+    metadata = generate_gait_demographic(syn)
 
     # get this script git blob URL
     used_script_url = query.get_git_used_script_url(
