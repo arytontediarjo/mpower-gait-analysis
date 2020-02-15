@@ -25,8 +25,8 @@ data_dict = {
         "MPOWER_V1": "syn10371840",
         "MPOWER_V2": "syn15673379",
         "MPOWER_PASSIVE": "syn15673379",
-        "ELEVATE_MS": {"demo_synId": "syn10295288",
-                       "profile_synId": "syn10235463"}},
+        "ELEVATE_MS_DEMO": "syn10295288",
+        "ELEVATE_MS_PROF": "syn10235463"},
     "OUTPUT_INFO": {
         "metadata_filename": "active_gait_metadata.csv",
         "parent_folder_synId": "syn21537423",
@@ -110,13 +110,13 @@ def generate_gait_metadata(syn):
         "SELECT healthCode, dataGroups as MS,\
         'gender.json.answer' as gender from {}\
         where dataGroups NOT LIKE '%test_user%'"
-        .format(data_dict["METADATA"]["ELEVATE_MS"]["demo_synId"]))\
-        .asDataFrame()
+        .format(data_dict["METADATA"]["ELEVATE_MS_DEMO"]
+                ["demo_synId"])).asDataFrame()
     profile_data_ems = syn.tableQuery(
         "SELECT healthCode as healthCode, \
         'demographics.age' as age from {}"
-        .format(data_dict["METADATA"]["ELEVATE_MS"]["profile_synId"]))\
-        .asDataFrame()
+        .format(data_dict["METADATA"]["ELEVATE_MS_PROF"]
+                ["profile_synId"])).asDataFrame()
     demo_data_ems = pd.merge(
         demo_data_ems, profile_data_ems, how="inner", on="healthCode")
     demo_data_ems["class"] = demo_data_ems["MS"].map(
@@ -134,8 +134,8 @@ def generate_gait_metadata(syn):
     demo_data_v2["birthYear"] = demo_data_v2[demo_data_v2["birthYear"].apply(
         lambda x: True if x >= 0 else False)]
     demo_data_v2["age"] = pd.to_datetime(
-        demo_data_v2["createdOn"], unit="ms").dt.year \
-        - demo_data_v2["birthYear"]
+        demo_data_v2["createdOn"], unit="ms").dt.year
+    - demo_data_v2["birthYear"]
 
     # concatenate all demographic data
     demo_data = pd.concat(
@@ -208,8 +208,8 @@ def main():
     query.save_data_to_synapse(
         syn=syn,
         data=metadata,
-        source_table_id=[dataframe["demo_synId"]
-                         for key, dataframe in data_dict["DATA"].items()],
+        source_table_id=[dataframe
+                         for key, dataframe in data_dict["METADATA"].items()],
         used_script=used_script_url,
         output_filename=data_dict["OUTPUT_INFO"]["metadata_filename"],
         data_parent_id=data_dict["OUTPUT_INFO"]["parent_folder_synId"])
