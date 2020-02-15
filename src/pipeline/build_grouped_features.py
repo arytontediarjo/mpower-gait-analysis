@@ -6,7 +6,6 @@ Script to group features by healthcodes,
 with several different aggregation
 
 """
-
 # import future libraries
 from __future__ import print_function
 from __future__ import unicode_literals
@@ -26,20 +25,46 @@ from utils import query_utils as query
 
 # global variables
 data_dict = {
-    "FEATURE_DATA": {
+    "FEATURE_DATA_SYNIDS": {
         "MPOWER_V1": "syn21597373",
         "MPOWER_V2": "syn21597625",
         "MPOWER_PASSIVE": "syn21597842",
         "ELEVATE_MS": "syn21597862"},
-    "METADATA": {
-        "ACTIVE": "syn21599370",
-        "PASSIVE": "syn21597318"},
+    "DEMOGRAPHIC_DATA_SYNID": "syn21602828",
     "OUTPUT_INFO": {
         "PARENT_FOLDER": "syn21592268",
         "PROJ_REPO_NAME": "mpower-gait-analysis",
         "PATH_GITHUB_TOKEN": "~/git_token.txt"}
 }
 syn = sc.login()
+
+
+def annot_phone(params):
+    """
+    Function to have more concrete phone types
+
+    Args:
+        params (type: string): raw phone information
+
+    Returns:
+        Rtype: String
+        Returns an annotated dataset with lesser choice of phone information
+    """
+    if ";" in params:
+        params = params.split(";")[0]
+    if ("iPhone 6+" in params) or ("iPhone 6 Plus" in params):
+        return "iPhone 6+"
+    elif ("Unknown" in params) or ("iPad" in params) or ("iPod" in params):
+        return "Other iPhone"
+    elif ("iPhone 5" in params) or ("iPhone5" in params):
+        return "iPhone 5"
+    elif ("iPhone8" in params) or ("iPhone 8" in params):
+        return "iPhone 8"
+    elif ("iPhone9" in params) or ("iPhone 9" in params):
+        return "iPhone 9"
+    elif ("iPhone X" in params) or ("iPhone10" in params):
+        return "iPhone X"
+    return params
 
 
 def iqr(x):
@@ -84,7 +109,7 @@ def skew(x):
     return x.skew()
 
 
-def groupby_wrapper(data, group, exclude_columns=[]):
+def groupby_wrapper(data, group, metadata_columns=[]):
     """
     Wrapper function to wrap feature data
     into several aggregation function
@@ -97,19 +122,32 @@ def groupby_wrapper(data, group, exclude_columns=[]):
         Rtype: pd.Dataframe
         Returns grouped healthcodes features
     """
-
-    features_cols = [feat for feat in data.columns if
-                     feat not in exclude_columns]
-    data = data[features_cols].groupby(group).agg([np.max,
-                                                   np.median,
-                                                   np.mean,
-                                                   q25, q75,
-                                                   valrange, iqr])
+    # groupby features based on several aggregation
+    feature_cols = [feat for feat in data.columns if
+                    feat not in metadata_columns]
+    feature_data = data[feature_cols].groupby(group).agg([np.max,
+                                                          np.median,
+                                                          np.mean,
+                                                          q25, q75,
+                                                          valrange, iqr])
     feature_cols = []
-    for feat, agg in data.columns:
+    for feat, agg in feature_data.columns:
         feature_cols_name = "{}_{}".format(agg, feat)
         feature_cols.append(feature_cols_name)
-    data.columns = feature_cols
+    feature_data.columns = feature_cols
+
+    # groupby metadata based on modes
+    metadata_columns.append("healthCode")
+    metadata = data[metadata_columns]\
+        .groupby(["healthCode"])\
+        .agg({"recordId": pd.Series.nunique,
+              "phoneInfo": pd.Series.mode,
+              "table_version": pd.Series.mode,
+              "class": pd.Series.mode})
+    metadata = metadata.rename({"recordId": "nrecords"}, axis=1)
+
+    # index join on aggregated feature and metadata
+    data = feature_data.join(metadata, on="healthCode")
     return data
 
 
@@ -122,25 +160,21 @@ def main():
 
     metadata_cols = ['appVersion', 'createdOn',
                      'phoneInfo', 'recordId',
-                     'table_version', 'test_type']
-
-    for key, feature_synId in data_dict["FEATURE_DATA"].items():
-        if "PASSIVE" in key:
-            metadata_synId = data_dict["METADATA"]["PASSIVE"]
-        else:
-            metadata_synId = data_dict["METADATA"]["ACTIVE"]
-        metadata = query.get_file_entity(syn, metadata_synId)
-        data = query.get_file_entity(syn, feature_synId)
+                     'table_version', 'test_type',
+                     'error_type']
+    demo_data = query.get_file_entity(syn, data_dict["DEMOGRAPHIC_DATA_SYNID"])
+    for key, synId in data_dict["FEATURE_DATA_SYNIDS"].items():
+        data = query.get_file_entity(syn, synId)
         for test_type in data["test_type"].unique():
             subset = data[data["test_type"] == test_type]
             subset = groupby_wrapper(subset,
                                      "healthCode",
                                      metadata_cols)
-            subset = pd.merge(subset, metadata, on="healthCode", how="inner")
+            subset = pd.merge(subset, demo_data, on="healthCode", how="inner")
             query.save_data_to_synapse(
                 syn=syn,
                 data=subset,
-                source_table_id=[feature_synId, metadata_synId],
+                source_table_id=[synId, data_dict["DEMOGRAPHIC_DATA_SYNID"]],
                 used_script=used_script_url,
                 output_filename=("grouped_%s_%s_features.csv" %
                                  (key, test_type)).lower(),
