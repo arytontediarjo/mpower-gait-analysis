@@ -186,7 +186,7 @@ def main():
                                      metadata_cols)
             subset = demo_data\
                 .join(subset, on="healthCode", how="inner")\
-                .reset_index
+                .reset_index()
             subset = subset.reset_index()
             query.save_data_to_synapse(
                 syn=syn,
