@@ -124,9 +124,9 @@ def groupby_wrapper(data, group, metadata_columns=[]):
     """
 
     # groupby features based on several aggregation
-    feature_mapping = {"nonrot_seq": data[data["rotation_omega"].isnull()],
-                       "rot_seq": data[~data["rotation_omega"].isnull()]
-                       .drop("rotation_omega", axis=1)}
+    feature_mapping = {"nonrot_seq": data[data["rotation_omega"].isnull()]
+                       .drop("rotation_omega", axis=1),
+                       "rot_seq": data[~data["rotation_omega"].isnull()]}
     for gait_sequence, feature_data in feature_mapping.items():
         feature_cols = [feat for feat in feature_data.columns if
                         (feat not in metadata_columns)
