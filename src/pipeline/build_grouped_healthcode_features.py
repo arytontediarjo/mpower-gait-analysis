@@ -122,34 +122,46 @@ def groupby_wrapper(data, group, metadata_columns=[]):
         Rtype: pd.Dataframe
         Returns grouped healthcodes features
     """
+
     # groupby features based on several aggregation
     feature_cols = [feat for feat in data.columns if
                     (feat not in metadata_columns) or (feat == "healthCode")]
-    feature_data = data[feature_cols].groupby(group).agg([np.max,
-                                                          np.median,
-                                                          np.mean,
-                                                          q25, q75,
-                                                          valrange, iqr])
-    feature_cols = []
-    for feat, agg in feature_data.columns:
-        feature_cols_name = "{}_{}".format(agg, feat)
-        feature_cols.append(feature_cols_name)
-    feature_data.columns = feature_cols
 
-    # groupby metadata based on modes
-    metadata = data[metadata_columns]\
-        .groupby(["healthCode"])\
-        .agg({"recordId": pd.Series.nunique,
-              "phoneInfo": pd.Series.mode,
-              "table_version": pd.Series.mode,
-              "test_type": pd.Series.mode})
-    metadata = metadata.rename({"recordId": "nrecords"}, axis=1)
-    data["phoneInfo"] = data["phoneInfo"].apply(
-        lambda x: x[0] if not isinstance(x, str) else x)
-    data["phoneInfo"] = data["phoneInfo"].apply(annot_phone)
+    grouped_data = pd.DataFrame()
+    feature_mapping = {"nonrot_seq": data[data["rotation_omega"].isnull()],
+                       "rot_seq": data[~data["rotation_omega"].isnull()]}
+    for gait_sequence, feature_data in feature_mapping.items():
+        feature_data = feature_data[feature_cols]\
+            .groupby(group)\
+            .agg([np.max,
+                  np.median,
+                  np.mean,
+                  q25, q75,
+                  valrange, iqr])
+        feature_cols = []
+        for feat, agg in feature_data.columns:
+            feature_cols_name = "{}_{}_{}"\
+                .format(gait_sequence, agg, feat)
+            feature_cols.append(feature_cols_name)
+        feature_data.columns = feature_cols
 
-    # index join on aggregated feature and metadata
-    data = feature_data.join(metadata, on="healthCode")
+        # groupby metadata based on modes
+        metadata = data[metadata_columns]\
+            .groupby(["healthCode"])\
+            .agg({"recordId": pd.Series.nunique,
+                  "phoneInfo": pd.Series.mode,
+                  "table_version": pd.Series.mode,
+                  "test_type": pd.Series.mode})
+        metadata = metadata.rename({"recordId": "nrecords"}, axis=1)
+        metadata["phoneInfo"] = metadata["phoneInfo"].apply(
+            lambda x: x[0] if not isinstance(x, str) else x)
+        metadata["phoneInfo"] = metadata["phoneInfo"].apply(annot_phone)
+
+        # index join on aggregated feature and metadata
+        feature_data = feature_data.join(metadata, on="healthCode")
+        grouped_data = pd.concat([grouped_data, feature_data], sort=False)\
+            .reset_index(drop=True)
+
     return data.reset_index()
 
 
