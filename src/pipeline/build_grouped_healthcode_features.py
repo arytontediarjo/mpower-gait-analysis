@@ -54,8 +54,6 @@ def annot_phone(params):
         params = params.split(";")[0]
     if ("iPhone 6+" in params) or ("iPhone 6 Plus" in params):
         return "iPhone 6+"
-    elif ("Unknown" in params) or ("iPad" in params) or ("iPod" in params):
-        return "Other iPhone"
     elif ("iPhone 5" in params) or ("iPhone5" in params):
         return "iPhone 5"
     elif ("iPhone8" in params) or ("iPhone 8" in params):
@@ -64,6 +62,8 @@ def annot_phone(params):
         return "iPhone 9"
     elif ("iPhone X" in params) or ("iPhone10" in params):
         return "iPhone X"
+    else:
+        return "Other iPhone"
     return params
 
 
@@ -184,7 +184,10 @@ def main():
             subset = groupby_wrapper(subset,
                                      "healthCode",
                                      metadata_cols)
-            subset = demo_data.join(subset, on="healthCode", how="inner")
+            subset = demo_data\
+                .join(subset, on="healthCode", how="inner")\
+                .reset_index
+            subset = subset.reset_index()
             query.save_data_to_synapse(
                 syn=syn,
                 data=subset,
