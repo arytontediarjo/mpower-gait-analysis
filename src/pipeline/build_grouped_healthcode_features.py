@@ -124,49 +124,48 @@ def groupby_wrapper(data, group, metadata_columns=[]):
     """
 
     # groupby features based on several aggregation
-    feature_cols = [feat for feat in data.columns if
-                    (feat not in metadata_columns) or (feat == "healthCode")]
-
-    grouped_data = pd.DataFrame()
     feature_mapping = {"nonrot_seq": data[data["rotation_omega"].isnull()],
-                       "rot_seq": data[~data["rotation_omega"].isnull()]}
+                       "rot_seq": data[~data["rotation_omega"].isnull()]
+                       .drop("rotation_omega", axis=1)}
     for gait_sequence, feature_data in feature_mapping.items():
-        feature_data = feature_data[feature_cols]\
+        feature_cols = [feat for feat in feature_data.columns if
+                        (feat not in metadata_columns)
+                        or (feat == "healthCode")]
+        feature_mapping[gait_sequence] = feature_data[feature_cols]\
             .groupby(group)\
             .agg([np.max,
                   np.median,
                   np.mean,
                   q25, q75,
                   valrange, iqr])
-        feature_cols = []
-        for feat, agg in feature_data.columns:
-            feature_cols_name = "{}_{}_{}"\
-                .format(gait_sequence, agg, feat)
-            feature_cols.append(feature_cols_name)
-        feature_data.columns = feature_cols
+        agg_feature_cols = []
+        for feat, agg in feature_mapping[gait_sequence].columns:
+            agg_feature_cols.append("{}_{}_{}"
+                                    .format(gait_sequence, agg, feat))
+        feature_mapping[gait_sequence].columns = agg_feature_cols
 
-        # groupby metadata based on modes
-        metadata = data[metadata_columns]\
-            .groupby(["healthCode"])\
-            .agg({"recordId": pd.Series.nunique,
-                  "phoneInfo": pd.Series.mode,
-                  "table_version": pd.Series.mode,
-                  "test_type": pd.Series.mode})
-        metadata = metadata.rename({"recordId": "nrecords"}, axis=1)
-        metadata["phoneInfo"] = metadata["phoneInfo"].apply(
-            lambda x: x[0] if not isinstance(x, str) else x)
-        metadata["phoneInfo"] = metadata["phoneInfo"].apply(annot_phone)
+    feature_data = pd.concat([seqs for _, seqs in feature_mapping.items()],
+                             join="outer",
+                             axis=1)
+    feature_data.index.name = "healthCode"
 
-        # index join on aggregated feature and metadata
-        feature_data = feature_data.join(metadata, on="healthCode")
-        grouped_data = pd.concat([grouped_data, feature_data], sort=False)\
-            .reset_index(drop=True)
+    # groupby metadata based on modes
+    metadata = data[metadata_columns]\
+        .groupby(["healthCode"])\
+        .agg({"recordId": pd.Series.nunique,
+              "phoneInfo": pd.Series.mode,
+              "table_version": pd.Series.mode,
+              "test_type": pd.Series.mode})
+    metadata = metadata.rename({"recordId": "nrecords"}, axis=1)
+    metadata["phoneInfo"] = metadata["phoneInfo"].apply(
+        lambda x: x[0] if not isinstance(x, str) else x)
+    metadata["phoneInfo"] = metadata["phoneInfo"].apply(annot_phone)
 
-    return data.reset_index()
+    # return features and metadata
+    return feature_data.join(metadata, on="healthCode")
 
 
 def main():
-
     used_script_url = query.get_git_used_script_url(
         path_to_github_token=data_dict["OUTPUT_INFO"]["PATH_GITHUB_TOKEN"],
         proj_repo_name=data_dict["OUTPUT_INFO"]["PROJ_REPO_NAME"],
@@ -176,7 +175,8 @@ def main():
                      'phoneInfo', 'recordId',
                      'table_version', 'test_type',
                      'error_type', "healthCode"]
-    demo_data = query.get_file_entity(syn, data_dict["DEMOGRAPHIC_DATA_SYNID"])
+    demo_data = query.get_file_entity(
+        syn, data_dict["DEMOGRAPHIC_DATA_SYNID"]).set_index("healthCode")
     for key, synId in data_dict["FEATURE_DATA_SYNIDS"].items():
         data = query.get_file_entity(syn, synId)
         for test_type in data["test_type"].unique():
@@ -184,7 +184,7 @@ def main():
             subset = groupby_wrapper(subset,
                                      "healthCode",
                                      metadata_cols)
-            subset = pd.merge(subset, demo_data, on="healthCode", how="inner")
+            subset = demo_data.join(subset, on="healthCode", how="inner")
             query.save_data_to_synapse(
                 syn=syn,
                 data=subset,
