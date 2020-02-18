@@ -62,13 +62,13 @@ def annot_phone(params):
     elif ("iPhone5" in params):
         return "iPhone5"
     elif ("iPhone8" in params):
-        return "iPhone 8"
+        return "iPhone8"
     elif ("iPhone9" in params):
-        return "iPhone 9"
+        return "iPhone9"
     elif ("iPhoneX" in params) or ("iPhone10" in params):
-        return "iPhone X"
+        return "iPhoneX"
     else:
-        return "Other iPhone"
+        return "Others"
 
 
 def iqr(x):
