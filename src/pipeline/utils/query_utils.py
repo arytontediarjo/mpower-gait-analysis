@@ -120,10 +120,10 @@ def get_walking_synapse_table(syn,
                         right_on="file_handle_id",
                         how="left")
         data = data.rename(
-          columns={feat: "{}_path_id".format(feat),
-                  "file_path": "{}_pathfile".format(feat)})\
+            columns={feat: "{}_path_id".format(feat),
+                     "file_path": "{}_pathfile".format(feat)})\
             .drop(["file_handle_id"], axis=1)
-    
+
     # Empty Filepaths on synapseTable
     cols = [feat for feat in data.columns if "path_id" not in feat]
     return data[cols]
@@ -152,7 +152,7 @@ def save_data_to_synapse(syn,
     Returns:
         Returns stored file entity in Synapse database
     """
-    
+
     # path to output filename for reference
     path_to_output_filename = os.path.join(os.getcwd(), output_filename)
 
@@ -230,11 +230,11 @@ def get_file_entity(syn, synid):
     """
     Utility function to get data (csv,tsv) file entity
     and turn it into pd.DataFrame
-    
+
     Args:
         syn   : a syn object
         synid : syn id of file entity
-    
+
     Returns:
         Returns a dataframe of the synapse file entity
     """

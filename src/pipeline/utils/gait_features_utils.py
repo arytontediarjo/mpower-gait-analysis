@@ -534,8 +534,6 @@ class GaitFeaturize:
             energy_freeze_index, \
                 locomotor_freeze_index = self._calculate_freeze_index(
                     series, self.sampling_frequency)
-
-            feature_dict["%s_steps" % axis] = steps
             feature_dict["%s_energy_freeze_index" % axis] = energy_freeze_index
             feature_dict["%s_loco_freeze_index" %
                          axis] = locomotor_freeze_index

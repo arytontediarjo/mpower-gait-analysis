@@ -38,6 +38,8 @@ data_dict = {
 }
 syn = sc.login()
 
+# TODO: fix using regex
+
 
 def annot_phone(params):
     """
@@ -52,19 +54,21 @@ def annot_phone(params):
     """
     if ";" in params:
         params = params.split(";")[0]
-    if ("iPhone 6+" in params) or ("iPhone 6 Plus" in params):
-        return "iPhone 6+"
-    elif ("iPhone 5" in params) or ("iPhone5" in params):
-        return "iPhone 5"
-    elif ("iPhone8" in params) or ("iPhone 8" in params):
+    params = params.replace(" ", "")
+    if ("iPhone6+" in params):
+        return "iPhone6+"
+    elif ("iPhone6" in params):
+        return "iPhone6"
+    elif ("iPhone5" in params):
+        return "iPhone5"
+    elif ("iPhone8" in params):
         return "iPhone 8"
-    elif ("iPhone9" in params) or ("iPhone 9" in params):
+    elif ("iPhone9" in params):
         return "iPhone 9"
-    elif ("iPhone X" in params) or ("iPhone10" in params):
+    elif ("iPhoneX" in params) or ("iPhone10" in params):
         return "iPhone X"
     else:
         return "Other iPhone"
-    return params
 
 
 def iqr(x):

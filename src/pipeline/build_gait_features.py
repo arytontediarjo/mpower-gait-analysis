@@ -186,6 +186,11 @@ def main():
         # concat data to previously stored data
         data = pd.concat([prev_stored_data, data])\
             .reset_index(drop=True)
+
+        # remove filepath feature columns
+        data = data[[feat for feat in data.columsn if (
+            "filepath" not in feat)]]
+
         query.save_data_to_synapse(
             syn=syn,
             data=data,
