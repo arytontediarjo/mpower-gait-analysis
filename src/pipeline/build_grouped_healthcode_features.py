@@ -75,21 +75,7 @@ def iqr(x):
     """
     Function for getting IQR value
     """
-    return q75(x) - q25(x)
-
-
-def q25(x):
-    """
-    Function for getting first quantile
-    """
-    return x.quantile(0.25)
-
-
-def q75(x):
-    """
-    Function for getting third quantile
-    """
-    return x.quantile(0.75)
+    return x.quantile(0.75) - x.quantile(0.25)
 
 
 def valrange(x):
@@ -97,20 +83,6 @@ def valrange(x):
     Function for getting the value range
     """
     return x.max() - x.min()
-
-
-def kurtosis(x):
-    """
-    Function to retrieve kurtosis
-    """
-    return x.kurt()
-
-
-def skew(x):
-    """
-    Function to retrieve skewness
-    """
-    return x.skew()
 
 
 def groupby_wrapper(data, group, metadata_columns=[]):
@@ -139,8 +111,6 @@ def groupby_wrapper(data, group, metadata_columns=[]):
             .groupby(group)\
             .agg([np.max,
                   np.median,
-                  np.mean,
-                  q25, q75,
                   valrange, iqr])
         agg_feature_cols = []
         for feat, agg in feature_mapping[gait_sequence].columns:
