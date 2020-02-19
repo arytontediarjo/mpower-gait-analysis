@@ -105,7 +105,7 @@ def groupby_wrapper(data, group, metadata_columns=[]):
                             .isnull()].drop("rotation_omega", axis=1),
                        "rot_seq":
                        data[~data["rotation_omega"]
-                            .isnull()][["rotation_omega"]]
+                            .isnull()][["healthCode", "rotation_omega"]]
                        }
     for gait_sequence, feature_data in feature_mapping.items():
         feature_cols = [feat for feat in feature_data.columns if

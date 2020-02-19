@@ -188,7 +188,7 @@ def main():
             .reset_index(drop=True)
 
         # remove filepath feature columns
-        data = data[[feat for feat in data.columsn if (
+        data = data[[feat for feat in data.columns if (
             "filepath" not in feat)]]
 
         query.save_data_to_synapse(
