@@ -55,7 +55,7 @@ def annot_phone(params):
     if ";" in params:
         params = params.split(";")[0]
     params = params.replace(" ", "")
-    if ("iPhone6+" in params):
+    if ("iPhone6+" in params) or ("iPhone6S+" in params):
         return "iPhone6+"
     elif ("iPhone6" in params):
         return "iPhone6"
@@ -100,9 +100,13 @@ def groupby_wrapper(data, group, metadata_columns=[]):
     """
 
     # groupby features based on several aggregation
-    feature_mapping = {"nonrot_seq": data[data["rotation_omega"].isnull()]
-                       .drop("rotation_omega", axis=1),
-                       "rot_seq": data[~data["rotation_omega"].isnull()]}
+    feature_mapping = {"nonrot_seq":
+                       data[data["rotation_omega"]
+                            .isnull()].drop("rotation_omega", axis=1),
+                       "rot_seq":
+                       data[~data["rotation_omega"]
+                            .isnull()][["rotation_omega"]]
+                       }
     for gait_sequence, feature_data in feature_mapping.items():
         feature_cols = [feat for feat in feature_data.columns if
                         (feat not in metadata_columns)
@@ -114,8 +118,8 @@ def groupby_wrapper(data, group, metadata_columns=[]):
                   valrange, iqr])
         agg_feature_cols = []
         for feat, agg in feature_mapping[gait_sequence].columns:
-            agg_feature_cols.append("{}_{}_{}"
-                                    .format(gait_sequence, agg, feat))
+            agg_feature_cols.append("{}_{}"
+                                    .format(agg, feat))
         feature_mapping[gait_sequence].columns = agg_feature_cols
 
     feature_data = pd.concat([seqs for _, seqs in feature_mapping.items()],
@@ -136,7 +140,8 @@ def groupby_wrapper(data, group, metadata_columns=[]):
     metadata["phoneInfo"] = metadata["phoneInfo"].apply(annot_phone)
 
     # return features and metadata
-    return feature_data.join(metadata, on="healthCode")
+    return feature_data.join(metadata,
+                             on="healthCode")
 
 
 def main():
@@ -161,7 +166,7 @@ def main():
             subset = demo_data\
                 .join(subset, on="healthCode", how="inner")\
                 .reset_index()
-            subset = subset.reset_index()
+
             query.save_data_to_synapse(
                 syn=syn,
                 data=subset,
