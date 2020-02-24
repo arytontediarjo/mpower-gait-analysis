@@ -182,13 +182,12 @@ def main():
             grouped_feature_data = aggregate_wrapper(
                 subset,
                 args.group,
-                metadata_cols).reset_index()
+                metadata_cols)
             grouped_feature_data = pd.merge(
                 grouped_feature_data, demo_data,
                 on="healthCode", how="left")
             results_group_data = pd.concat(
-                [results_group_data, grouped_feature_data], sort=False)\
-                .reset_index()
+                [results_group_data, grouped_feature_data]).reset_index(drop = True)
 
         # delete unused data to save memory usage
         del data
@@ -204,12 +203,12 @@ def main():
     query.save_data_to_synapse(
         syn=syn,
         data=results_group_data,
-        source_table_id=([synid for key, synid
-                          in data_dict["FEATURE_DATA_SYNIDS"].items()]
-                         + data_dict["DEMOGRAPHIC_DATA_SYNID"]),
+        source_table_id=[synid for key, synid
+                          in data_dict["FEATURE_DATA_SYNIDS"].items()]\
+                                  .append(data_dict["DEMOGRAPHIC_DATA_SYNID"]),
         used_script=used_script_url,
-        output_filename=("grouped_%s_%s_features.csv" %
-                         (key, test_type)).lower(),
+        output_filename=("grouped_%s_features.csv" %
+                         (args.group)),
         data_parent_id="syn21537421")
 
 
