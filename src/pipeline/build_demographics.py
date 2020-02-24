@@ -21,13 +21,13 @@ from utils import query_utils as query
 
 # global variables
 data_dict = {
-    "METADATA": {
+    "DEMOGRAPHICS": {
         "MPOWER_V1": "syn10371840",
         "MPOWER_V2": "syn15673379",
         "ELEVATE_MS_DEMO": "syn10295288",
         "ELEVATE_MS_PROF": "syn10235463"},
     "OUTPUT_INFO": {
-        "metadata_filename": "gait_metadata.csv",
+        "demographics_filename": "gait_demographics.csv",
         "parent_folder_synId": "syn21537423",
         "proj_repo_name": "mpower-gait-analysis",
         "path_to_github_token": "~/git_token.txt"}
@@ -163,7 +163,8 @@ def main():
         syn=syn,
         data=metadata,
         source_table_id=[dataframe
-                         for key, dataframe in data_dict["METADATA"].items()],
+                         for key, dataframe
+                         in data_dict["DEMOGRAPHICS"].items()],
         used_script=used_script_url,
         output_filename=data_dict["OUTPUT_INFO"]["metadata_filename"],
         data_parent_id=data_dict["OUTPUT_INFO"]["parent_folder_synId"])
