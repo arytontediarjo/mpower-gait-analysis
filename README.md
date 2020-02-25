@@ -12,25 +12,27 @@ This project utilizes the gait signal data that is taken during the mPower walki
 
 All functionalities have been encapsulated in a makefile, thus some of the process of running this project can be called in a format of "make (some commands)"
 
-### 1. Create Python Environment:
+### Using Docker
 
-#### a. Using Makefile (TODO)
-```
-make requirements
-```
-
-#### b. Using Docker Images (TODO)
 ```
 sudo service docker start
+docker build -t <name of docker image> .
+docker run -v ~/.synapseCache:/root/.synapseCache -it --rm pipeline /bin/bash
 ```
 
-### 2. Create Featurized Data:
+Once you are inside the docker container, there will be a Makefile that is already set with few rules on the data pipeline. 
+
+#### 1. Create Featurized Data:
 ```
 make data
 ```
 
-### 3. Query Metadata:
+#### 2. Query Cleaned Gait Demographics:
 ```
-make metadata
+make demographics
 ```
 
+#### 3. Get Aggregated Features:
+```
+make aggregate
+```
