@@ -71,7 +71,7 @@ def generate_gait_demographic(syn):
         inferred_diagnosis as PD, gender \
         FROM {} where dataGroups \
         NOT LIKE '%test_user%'"
-        .format(data_dict["METADATA"]["MPOWER_V1"]))\
+        .format(data_dict["DEMOGRAPHICS"]["MPOWER_V1"]))\
         .asDataFrame()
     demo_data_v1 = demo_data_v1\
         .dropna(subset=["PD"], thresh=1)
@@ -83,12 +83,12 @@ def generate_gait_demographic(syn):
         "SELECT healthCode, dataGroups as MS,\
         'gender.json.answer' as gender from {}\
         where dataGroups NOT LIKE '%test_user%'"
-        .format(data_dict["METADATA"]["ELEVATE_MS_DEMO"]))\
+        .format(data_dict["DEMOGRAPHICS"]["ELEVATE_MS_DEMO"]))\
         .asDataFrame()
     profile_data_ems = syn.tableQuery(
         "SELECT healthCode as healthCode, \
         'demographics.age' as age from {}"
-        .format(data_dict["METADATA"]["ELEVATE_MS_PROF"]))\
+        .format(data_dict["DEMOGRAPHICS"]["ELEVATE_MS_PROF"]))\
         .asDataFrame()
     demo_data_ems = pd.merge(
         demo_data_ems, profile_data_ems, how="inner", on="healthCode")
@@ -100,7 +100,7 @@ def generate_gait_demographic(syn):
         "SELECT birthYear, createdOn, healthCode, \
         diagnosis as PD, sex as gender FROM {} \
         where dataGroups NOT LIKE '%test_user%'"
-        .format(data_dict["METADATA"]["MPOWER_V2"])).asDataFrame()
+        .format(data_dict["DEMOGRAPHICS"]["MPOWER_V2"])).asDataFrame()
     demo_data_v2 = demo_data_v2[demo_data_v2["PD"] != "no_answer"]
     demo_data_v2["class"] = demo_data_v2["PD"]\
         .map({"parkinsons": "PD", "control": "control"})
@@ -166,7 +166,7 @@ def main():
                          for key, dataframe
                          in data_dict["DEMOGRAPHICS"].items()],
         used_script=used_script_url,
-        output_filename=data_dict["OUTPUT_INFO"]["metadata_filename"],
+        output_filename=data_dict["OUTPUT_INFO"]["demographics_filename"],
         data_parent_id=data_dict["OUTPUT_INFO"]["parent_folder_synId"])
 
 
