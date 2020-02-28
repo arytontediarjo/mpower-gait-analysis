@@ -23,37 +23,37 @@ This project utilizes the gait signal data that is taken during the mPower walki
 
 ## How-to-use:
 
-All functionalities have been encapsulated in a makefile, thus some of the process of running this project can be called in a format of "make (some commands)"
 
+### 1. Create Environment:
 
-### Using pip
+#### a. Using pip
 ```
-pip install -r requirements.txt
+make requirements
 ```
 
-### Using Docker
+#### b. Using Docker
 
 ```
 docker build -t <name of docker image> .
 docker run -v <path-local-volume>:<path-to-designated-volume-location> -it --rm <name-of-image> /bin/bash
 ```
 
-#### 1. Create Featurized Data:
+### 2. Create Featurized Data:
 ```
 make data
 ```
 
-#### 2. Update Data:
+### 3. Update Data:
 ```
 make update
 ```
 
-#### 3. Query Cleaned Gait User Demographics:
+### 4. Query Cleaned Gait User Demographics:
 ```
 make demographics
 ```
 
-#### 4. Retrieve Aggregated Features:
+### 5. Retrieve Aggregated Features:
 ```
 make aggregate
 ```
