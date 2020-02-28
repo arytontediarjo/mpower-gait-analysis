@@ -86,7 +86,6 @@ Send2Trash==1.5.0
 simplejson==3.17.0
 six==1.13.0
 sortedcontainers==2.1.0
--e git+https://github.com/arytontediarjo/mpower-gait-analysis.git@10907ba37d9dfdf2878acd6fc78f4af96979c1fb#egg=src
 statsmodels==0.10.1
 synapseclient==1.9.3
 tblib==1.5.0
