@@ -34,8 +34,8 @@ update:
 clean:
 	find . -type f -name "*.py[co]" -delete
 	find . -type d -name "__pycache__" -delete
-	find ~/. -type f -name "MPOWER_V1_gait_features.csv" -delete
-	find ~/. -type f -name "MPOWER_V2_gait_features.csv" -delete
-	find ~/. -type f -name "MPOWER_PASSIVE_gait_features.csv" -delete
-	find ~/. -type f -name "ELEVATE_MS_gait_features.csv" -delete
+	find ~/.synapseCache/. -type f -name "MPOWER_V1_gait_features.csv" -delete
+	find ~/.synapseCache/. -type f -name "MPOWER_V2_gait_features.csv" -delete
+	find ~/.synapseCache/. -type f -name "MPOWER_PASSIVE_gait_features.csv" -delete
+	find ~/.synapseCache/. -type f -name "ELEVATE_MS_gait_features.csv" -delete
 	
