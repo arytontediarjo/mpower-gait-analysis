@@ -18,9 +18,11 @@ requirements:
 data: 
 	$(PYTHON_INTERPRETER) src/pipeline/build_gait_features.py 
 
+## Make Demographics
 demographics:
 	$(PYTHON_INTERPRETER) src/pipeline/build_demographics.py
 
+## Make aggregation
 aggregate:
 	$(PYTHON_INTERPRETER) src/pipeline/build_aggregation.py --group recordId
 	$(PYTHON_INTERPRETER) src/pipeline/build_aggregation.py --group healthCode

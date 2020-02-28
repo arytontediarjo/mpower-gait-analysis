@@ -1,11 +1,8 @@
 """
-
-Author: Sage Bionetworks
-
-Script to group features by healthcodes,
-with several different aggregation
-
+Script to group features by healthcodes or recordIds
+with several aggregations
 """
+
 # import future libraries
 from __future__ import print_function
 from __future__ import unicode_literals
@@ -167,6 +164,14 @@ def aggregate_wrapper(data, group, metadata_columns=[]):
 
 
 def main():
+    """
+    Main Function:
+
+    Takes in several data from featurized file entity and demographics
+    file entity and group by based on user prompt (recordId or healthcodes)
+    using aggregation based on interquartiles,
+    value ranges, median and abs max.
+    """
     args = read_args()
     metadata_cols = ['appVersion', 'createdOn',
                      'phoneInfo', 'recordId',
@@ -175,7 +180,7 @@ def main():
     demo_data = query.get_file_entity(
         syn, data_dict["DEMOGRAPHIC_DATA_SYNID"])
     results_group_data = pd.DataFrame()
-    for key, synId in data_dict["FEATURE_DATA_SYNIDS"].items():
+    for _, synId in data_dict["FEATURE_DATA_SYNIDS"].items():
         data = query.get_file_entity(syn, synId)
         for test_type in data["test_type"].unique():
             subset = data[data["test_type"] == test_type]
@@ -187,7 +192,8 @@ def main():
                 grouped_feature_data, demo_data,
                 on="healthCode", how="left")
             results_group_data = pd.concat(
-                [results_group_data, grouped_feature_data]).reset_index(drop = True)
+                [results_group_data, grouped_feature_data])\
+                .reset_index(drop=True)
 
         # delete unused data to save memory usage
         del data
@@ -204,8 +210,8 @@ def main():
         syn=syn,
         data=results_group_data,
         source_table_id=[synid for key, synid
-                          in data_dict["FEATURE_DATA_SYNIDS"].items()]\
-                                  .append(data_dict["DEMOGRAPHIC_DATA_SYNID"]),
+                         in data_dict["FEATURE_DATA_SYNIDS"].items()]
+        .append(data_dict["DEMOGRAPHIC_DATA_SYNID"]),
         used_script=used_script_url,
         output_filename=("grouped_%s_features.csv" %
                          (args.group)),

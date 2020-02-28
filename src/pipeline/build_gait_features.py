@@ -160,6 +160,12 @@ def normalize_feature_sets(data, target_feature):
 
 
 def main():
+    """
+    Main Function:
+
+    Takes in data from mPower Gait Tables and parsed
+    through featurization tools in the repo /utils
+    """
     args = read_args()
     all_data = pd.concat([standardize_mpower_data(values) for key,
                           values in data_dict.items()
