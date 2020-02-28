@@ -1,0 +1,207 @@
+---
+Author: Aryton Tediarjo
+Title: Matching on Parkinson Prediction Metadata
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+# Matching on mPower User Metadata
+
+This analysis will go through the process of matching the users of mPower active walking tests. It takes in iOS users that have been filtered from any errors of not having any data, as well as informationon user acceleration. Documentation of pipeline is referenced on https://github.com/arytontediarjo/mpower-gait-analysis.
+
+
+## Prepare Data
+
+### Required Library Imports 
+```{r message=F, warning=F}
+library(plyr)
+library(tidyverse)
+library(ggplot2)
+library(synapser)
+library(MatchIt)
+library(Matching)
+library(tableone)
+library(fastDummies)
+library(MASS)
+library(knitr)
+library(dplyr)
+library(knit2synapse)
+library(ggbiplot)
+```
+
+### Helper Functions
+```{r, message=F, warning=F}
+get_healthcode_metadata <- function(synId){
+  data <- synapser::synGet(synId) 
+  data <- read_csv(data$path,
+                     col_types = cols(nrecords = col_integer(), age = col_double()))
+  data <- data %>% 
+            dplyr::select(healthCode, age, gender, phoneInfo, class, table_version, nrecords)
+  return(data)
+}
+
+create_dummies <- function(data, list_cols){
+  data = dummy_cols(data, select_columns = list_cols, remove_first = TRUE)
+  data <- data %>% 
+    dplyr::select(-list_cols)
+  return(data)
+}
+
+```
+
+
+### Get gait metadata dataset from Synapse 
+```{r , echo = FALSE, comment=NA, warning=FALSE, message=FALSE, results='hide',fig.keep='all'}
+synapser::synLogin()
+data_v1 <- get_healthcode_metadata(synId = "syn21599478") 
+data_v2 <- get_healthcode_metadata(synId = "syn21599516")
+data_ems <- get_healthcode_metadata(synId = "syn21599521")
+data <- dplyr::bind_rows(data_v1, data_v2, data_ems)
+data <- data %>% 
+  filter(class %in% c("control", "PD"))
+```
+
+## Assessing Principal Components on Metadata 
+
+To get a better understanding of our metadata distributions accross versions, a PCA plot of the first and second component would give us a better explanation whether there are any specific clusters or separation between our metadatas. Thus, we would create a dummy variables on the phone information and keep all other continuous variable as numeric. Here are the variables that we are going to use for assessing the principal components (age, gender, phoneInfo_<type_of_phone>). 
+
+Note: We will use controls from elevate MS to leverage larger samples size from controls
+      Number of records is not used due to extreme outlier effects, will be addressed in results
+
+```{r , echo = FALSE, comment=NA, warning=FALSE, message=FALSE, results='hide',fig.keep='all'}
+pca <- create_dummies(data, c("gender", "phoneInfo")) %>% 
+  select_if(., is.numeric) 
+pca <- prcomp(pca, center = TRUE, scale. = TRUE)
+pca.version <- data$table_version
+pca.PD <- data$class
+
+pca.version.plot <- ggbiplot(pca, ellipse=TRUE, groups = pca.version, var.axes = TRUE, var.scale = 2, obs.scale = 1) 
+pca.version.plot <- pca.version.plot + scale_color_discrete(name = '') + 
+  labs(title = "PC1 vs PC2 of Metadata Grouped by Versions" ) + xlim(c(-5,5)) + ylim(c(-5,5))
+plot(pca.version.plot)
+
+
+pca.PD.plot <- ggbiplot(pca, ellipse=TRUE, groups = pca.PD, 
+                        var.axes = TRUE, var.scale = 2, obs.scale = 1) 
+pca.PD.plot <- pca.PD.plot + scale_color_discrete(name = '') + xlim(c(-5,5))+ ylim(c(-5,5)) + labs(title = "PC1 vs PC2 of Metadata Grouped by PD" )
+plot(pca.PD.plot)
+```
+
+From the PCA plot of the first and second components, we can see that there are some separations between the version columns groupings in the PCA plots, especially in iPhone 5 users that is available only in the mPower Version 1 (negative eigenvectors in PC1 and PC2) causing some of the version cluster to shift left. A minor left shift also occurs in the metadata PCA with PD as groups plot, which is caused by the imbalance, whereas an ideal case of PCA that we would like to have is an overlapping cluster treatment-control users.
+
+
+## Can Statistical Matching fix Metadata Shift?
+
+To fix the shift in our metadata, we will try using statistical matching to create a subsample of metadata that is more balanced. Thus, we will use nearest neighbor matching to sustain some amount of users and assess tha balance using table one. Afterwards another PCA plot will be created as deliverable of this method.
+
+
+### Experimental Design
+
+variables: age,  gender, nrecords, phoneInfo
+continuous: age, nrecords
+categorical: gender, phoneInfo
+treatment/control: PD (1)/control (0)
+
+In this analysis, we would like to use table one, to assess the differences between treatment and control groups. An ideal case would be a p-value > 0.05 and an SMD below 0.1, which indicates indifferences between the metadata. 
+
+### User Distribution Before Matching:
+
+```{r}
+data <- data %>% mutate(PD_class = recode(class,
+                                   "PD"= 1,
+                                   "control"=0))
+
+
+vars <- c("age", "gender", "nrecords", "phoneInfo")
+catvars <- c("gender", "phoneInfo")
+
+table1 <- CreateTableOne(vars = vars, 
+                         strata = "PD_class", 
+                         data = data,
+                         factorVars = catvars,
+                         test = TRUE)
+
+print(table1, smd = TRUE, showAllLevels = TRUE)
+```
+
+From the table one generated above, we can see that the rate of male PD (number of male PD/given male sample) is lower than the rate of female PD, which is the inverse of what we know from clinical research that males are 1.5 more likely to have PD. PD are more likely to be older, which is consistent to what we know. And in terms of phone info metadata users, we can see that there are severe imbalances where all user with iphone6+ is all PD, and users of iPhone6 is mostly controls. Thus, this might cause an reverse identification in our model as it can create association that a control is most likey an iPhone6 user or a PD is most likely a iPhone6+ user, which is not what we want in our gait features. 
+
+### Nearest Neighbor Propensity Matching:
+```{r}
+m.out <- matchit(PD_class ~ `phoneInfo` + `gender` + `nrecords` + `age`,
+        data = data, method = "nearest", caliper = 0.01)
+```
+
+```{r}
+summary(m.out)
+```
+
+### QQ plot of matching data
+```{r}
+plot(m.out, col = c("orange"))
+```
+
+
+### Histogram plot of propensity scores
+```{r}
+plot(m.out, type = "hist", col = c("orange"))
+```
+
+
+### New Table One
+```{r}
+logit.m.out.data <- match.data(m.out)
+table1 <- CreateTableOne(vars = vars, strata = "PD_class", data = logit.m.out.data)
+print(table1, smd = TRUE)
+```
+### Results on Matched HealthCodes:
+
+The QQ-plot shows that the matched users is more normally distributed on each metadata groups, as the points are fitted better to the normal line.
+Whereas the histogram shows a logistic regression prediction on the treatment and controls is more indifferent on the matched users, whereas using the initial
+user metadata, we can see that a simple classifier has an unusually great performance oninferring the prediction probability of both the controls 
+and the treatmeng groups.
+
+From the table one, we can also see despite that we have reduced some amount of data, however, in terms of the p-values and the group SMD
+we can see that the new metadata is indifferent towards inferring the treatment and control groups, which is an indication that we have broken
+the association of metadata to our analysis, which means that we can have an unbiased analysis on the signal gait features.
+
+Next step, we would like to use this matched users dataset to conduct further analysis of classifiying PD vs non-PD on the active data and build
+unbiased predictive model that we can use reliably.
+
+
+### PCA plots on Matched HealthCodes:
+```{r, echo = FALSE, comment=NA, warning=FALSE, message=FALSE, results='hide',fig.keep='all'}
+pca <- create_dummies(logit.m.out.data, c("gender", "phoneInfo")) %>% 
+  select_if(., is.numeric) %>% 
+  dplyr::select(-c(weights, distance, PD_class))
+pca <- prcomp(pca, center = TRUE, scale. = TRUE)
+pca.version <- logit.m.out.data$table_version
+pca.PD <- logit.m.out.data$class
+
+pca.version.plot <- ggbiplot(pca, ellipse=TRUE, groups = pca.version, var.axes = TRUE, var.scale = 2, obs.scale = 1) 
+pca.version.plot <- pca.version.plot + scale_color_discrete(name = '') + labs(title = "PC1 vs PC2 of Metadata Grouped by Versions" ) + xlim(c(-7,7)) + ylim(c(-5,5))
+plot(pca.version.plot) 
+
+
+pca.PD.plot <- ggbiplot(pca, ellipse=TRUE, groups = pca.PD, var.axes = TRUE, var.scale = 2, obs.scale = 1) 
+pca.PD.plot <- pca.PD.plot + scale_color_discrete(name = '') +  xlim(c(-7,7)) + labs(title = "PC1 vs PC2 of Metadata Grouped by Class") + ylim(c(-5,5))
+plot(pca.PD.plot)
+```
+
+### Results:
+
+From the PCA plot above (first and second principal components), we can see that the matched healthcode PD and non-PDs are overlapped to each other and the plot also shows lesser separation in the app version groupings. Therefore, this subset of metadata will be a more reliable users that can be used to assess the gait features that we have in our pipeline, as we have broken the associations of metadata to our inferrence towards PD and non-PD
+
+
+## Save to Synapse
+```{r}
+write.csv(logit.m.out.data, "nearest_neighbor_matched_metadata.csv")
+activity <- Activity(used = "syn21547010", executed = "syn21614601")
+file <- File("nearest_neighbor_matched_metadata.csv", 
+             description = "Matched datasets for analysis", 
+             parent = "syn21537423")
+file <- synStore(file, activity = activity)
+```
+
