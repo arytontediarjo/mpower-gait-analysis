@@ -209,9 +209,9 @@ def main():
     query.save_data_to_synapse(
         syn=syn,
         data=results_group_data,
-        source_table_id=[synid for key, synid
-                         in data_dict["FEATURE_DATA_SYNIDS"].items()]
-        .append(data_dict["DEMOGRAPHIC_DATA_SYNID"]),
+        source_table_id=[synid for key, synid in
+                         data_dict["FEATURE_DATA_SYNIDS"].items()]
+        + [data_dict["DEMOGRAPHIC_DATA_SYNID"]],
         used_script=used_script_url,
         output_filename=("grouped_%s_features.csv" %
                          (args.group)),
