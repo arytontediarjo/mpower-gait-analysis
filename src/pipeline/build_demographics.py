@@ -20,17 +20,17 @@ import synapseclient as sc
 from utils import query_utils as query
 
 # global variables
-data_dict = {
+DATA_DICT = {
     "DEMOGRAPHICS": {
         "MPOWER_V1": "syn10371840",
         "MPOWER_V2": "syn15673379",
         "ELEVATE_MS_DEMO": "syn10295288",
         "ELEVATE_MS_PROF": "syn10235463"},
     "OUTPUT_INFO": {
-        "demographics_filename": "gait_demographics.csv",
-        "parent_folder_synId": "syn21537423",
-        "proj_repo_name": "mpower-gait-analysis",
-        "path_to_github_token": "~/git_token.txt"}
+        "FILENAME": "gait_demographics.csv",
+        "PARENT_SYN_ID": "syn21537423",
+        "PROJ_REPO": "mpower-gait-analysis",
+        "TOKEN_PATH": "~/git_token.txt"}
 }
 syn = sc.login()
 
@@ -71,7 +71,7 @@ def generate_gait_demographic(syn):
         inferred_diagnosis as PD, gender \
         FROM {} where dataGroups \
         NOT LIKE '%test_user%'"
-        .format(data_dict["DEMOGRAPHICS"]["MPOWER_V1"]))\
+        .format(DATA_DICT["DEMOGRAPHICS"]["MPOWER_V1"]))\
         .asDataFrame()
     demo_data_v1 = demo_data_v1\
         .dropna(subset=["PD"], thresh=1)
@@ -83,12 +83,12 @@ def generate_gait_demographic(syn):
         "SELECT healthCode, dataGroups as MS,\
         'gender.json.answer' as gender from {}\
         where dataGroups NOT LIKE '%test_user%'"
-        .format(data_dict["DEMOGRAPHICS"]["ELEVATE_MS_DEMO"]))\
+        .format(DATA_DICT["DEMOGRAPHICS"]["ELEVATE_MS_DEMO"]))\
         .asDataFrame()
     profile_data_ems = syn.tableQuery(
         "SELECT healthCode as healthCode, \
         'demographics.age' as age from {}"
-        .format(data_dict["DEMOGRAPHICS"]["ELEVATE_MS_PROF"]))\
+        .format(DATA_DICT["DEMOGRAPHICS"]["ELEVATE_MS_PROF"]))\
         .asDataFrame()
     demo_data_ems = pd.merge(
         demo_data_ems, profile_data_ems, how="inner", on="healthCode")
@@ -100,7 +100,7 @@ def generate_gait_demographic(syn):
         "SELECT birthYear, createdOn, healthCode, \
         diagnosis as PD, sex as gender FROM {} \
         where dataGroups NOT LIKE '%test_user%'"
-        .format(data_dict["DEMOGRAPHICS"]["MPOWER_V2"])).asDataFrame()
+        .format(DATA_DICT["DEMOGRAPHICS"]["MPOWER_V2"])).asDataFrame()
     demo_data_v2 = demo_data_v2[demo_data_v2["PD"] != "no_answer"]
     demo_data_v2["class"] = demo_data_v2["PD"]\
         .map({"parkinsons": "PD", "control": "control"})
@@ -155,8 +155,8 @@ def main():
 
     # get this script git blob URL
     used_script_url = query.get_git_used_script_url(
-        path_to_github_token=data_dict["OUTPUT_INFO"]["path_to_github_token"],
-        proj_repo_name=data_dict["OUTPUT_INFO"]["proj_repo_name"],
+        path_to_github_token=DATA_DICT["OUTPUT_INFO"]["TOKEN_PATH"],
+        proj_repo_name=DATA_DICT["OUTPUT_INFO"]["PROJ_REPO"],
         script_name=__file__)
 
     query.save_data_to_synapse(
@@ -164,10 +164,10 @@ def main():
         data=metadata,
         source_table_id=[dataframe
                          for key, dataframe
-                         in data_dict["DEMOGRAPHICS"].items()],
+                         in DATA_DICT["DEMOGRAPHICS"].items()],
         used_script=used_script_url,
-        output_filename=data_dict["OUTPUT_INFO"]["demographics_filename"],
-        data_parent_id=data_dict["OUTPUT_INFO"]["parent_folder_synId"])
+        output_filename=DATA_DICT["OUTPUT_INFO"]["FILENAME"],
+        data_parent_id=DATA_DICT["OUTPUT_INFO"]["PARENT_SYN_ID"])
 
 
 if __name__ == '__main__':

@@ -20,6 +20,7 @@ import argparse
 import multiprocessing
 import synapseclient as sc
 import pandas as pd
+import numpy as np
 
 # import local modules
 from utils import query_utils as query
@@ -27,17 +28,18 @@ from utils import gait_features_utils as gf_utils
 
 
 # GLOBAL VARIABLES
-data_dict = {"MPOWER_V1": {"synId": "syn10308918",
-                           "table_version": "MPOWER_V1"},
-             "MPOWER_V2": {"synId": "syn12514611",
-                           "table_version": "MPOWER_V2"},
-             "MPOWER_PASSIVE": {"synId": "syn17022539",
-                                "table_version": "MPOWER_PASSIVE"},
-             "ELEVATE_MS": {"synId": "syn10278766",
-                            "table_version": "ELEVATE_MS"},
-             "OUTPUT_INFO": {"parent_folder_synId": "syn21537420",
-                             "proj_repo_name": "mpower-gait-analysis",
-                             "git_token_path": "~/git_token.txt"}
+ZERO_CADENCE_CUTOFF = 5  # can change later
+DATA_DICT = {"MPOWER_V1": {"SYN_ID": "syn10308918",
+                           "TABLE_VERSION": "MPOWER_V1"},
+             "MPOWER_V2": {"SYN_ID": "syn12514611",
+                           "TABLE_VERSION": "MPOWER_V2"},
+             "MPOWER_PASSIVE": {"SYN_ID": "syn17022539",
+                                "TABLE_VERSION": "MPOWER_PASSIVE"},
+             "ELEVATE_MS": {"SYN_ID": "syn10278766",
+                            "TABLE_VERSION": "ELEVATE_MS"},
+             "OUTPUT_INFO": {"PARENT_SYN_ID": "syn21537420",
+                             "PROJ_REPO": "mpower-gait-analysis",
+                             "TOKEN_PATH": "~/git_token.txt"}
              }
 syn = sc.login()
 
@@ -56,8 +58,28 @@ def read_args():
     parser.add_argument("--partition", default=250,
                         help="Number of sample per partition,\
                             no negative number")
+    parser.add_argument("--filter", default=False,
+                        help="filter on cadence")
     args = parser.parse_args()
     return args
+
+
+def annotate_consecutive_zeros(data, feature):
+    """
+    Function to annotate consecutive zeros in a dataframe
+    Args:
+        data (type: pd.DataFrame)    : dataframe
+        feature : feature to assess on counting consecutive zeros
+    returns:
+        A new column-series of data with counted
+        consecutive zeros (if available)
+    """
+    step_shift_measure = data[feature].ne(data[feature].shift()).cumsum()
+    counts = data\
+        .groupby(['recordId', step_shift_measure])[feature]\
+        .transform('size')
+    data['consec_zero_cadence'] = np.where(data[feature].eq(0), counts, 0)
+    return data
 
 
 def featurize_wrapper(data):
@@ -97,8 +119,8 @@ def standardize_mpower_data(values):
         Concattenated and cleaned dataset with filepaths to json files as
         columns (gait_json_pathfile), and metadata columns
     """
-    table_id = values["synId"]
-    table_version = values["table_version"]
+    table_id = values["SYN_ID"]
+    table_version = values["TABLE_VERSION"]
 
     data = query.get_walking_synapse_table(syn=syn,
                                            table_id=table_id,
@@ -168,7 +190,7 @@ def main():
     """
     args = read_args()
     all_data = pd.concat([standardize_mpower_data(values) for key,
-                          values in data_dict.items()
+                          values in DATA_DICT.items()
                           if key != "OUTPUT_INFO"]).reset_index(drop=True)
 
     # Iteratively save data in different tables, join after in synapse
@@ -179,7 +201,7 @@ def main():
         if args.update:
             prev_stored_data = query.check_children(
                 syn=syn,
-                data_parent_id=data_dict["OUTPUT_INFO"]["parent_folder_synId"],
+                data_parent_id=DATA_DICT["OUTPUT_INFO"]["PARENT_SYN_ID"],
                 filename="%s_gait_features.csv" % version)
             data = data[~data["recordId"].isin(
                 prev_stored_data["recordId"].unique())]
@@ -197,16 +219,21 @@ def main():
         data = data[[feat for feat in data.columns if (
             "filepath" not in feat)]]
 
+        # remove consecutive zeros based on predefined parameters
+        if args.filter:
+            data = annotate_consecutive_zeros(data, "AA_cadence")
+            data = data[data["consec_zero_cadence"] < ZERO_CADENCE_CUTOFF]
+
         query.save_data_to_synapse(
             syn=syn,
             data=data,
             used_script=query.get_git_used_script_url(
-                path_to_github_token=data_dict["OUTPUT_INFO"]["git_token_path"],
-                proj_repo_name=data_dict["OUTPUT_INFO"]["proj_repo_name"],
+                path_to_github_token=DATA_DICT["OUTPUT_INFO"]["TOKEN_PATH"],
+                proj_repo_name=DATA_DICT["OUTPUT_INFO"]["PROJ_REPO"],
                 script_name=__file__),
-            source_table_id=data_dict[version]["synId"],
+            source_table_id=DATA_DICT[version]["SYN_ID"],
             output_filename="%s_gait_features.csv" % version,
-            data_parent_id=data_dict["OUTPUT_INFO"]["parent_folder_synId"])
+            data_parent_id=DATA_DICT["OUTPUT_INFO"]["PARENT_SYN_ID"])
 
         # clear data from memory
         del data

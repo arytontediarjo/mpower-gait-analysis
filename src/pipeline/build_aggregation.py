@@ -22,7 +22,7 @@ from utils import query_utils as query
 
 
 # global variables
-data_dict = {
+DATA_DICT = {
     "FEATURE_DATA_SYNIDS": {
         "MPOWER_V1": "syn21597373",
         "MPOWER_V2": "syn21597625",
@@ -30,9 +30,9 @@ data_dict = {
         "ELEVATE_MS": "syn21597862"},
     "DEMOGRAPHIC_DATA_SYNID": "syn21602828",
     "OUTPUT_INFO": {
-        "PARENT_FOLDER": "syn21592268",
-        "PROJ_REPO_NAME": "mpower-gait-analysis",
-        "PATH_GITHUB_TOKEN": "~/git_token.txt"}
+        "PARENT_SYN_ID": "syn21592268",
+        "PROJ_REPO": "mpower-gait-analysis",
+        "TOKEN_PATH": "~/git_token.txt"}
 }
 syn = sc.login()
 
@@ -86,13 +86,6 @@ def iqr(x):
     return x.quantile(0.75) - x.quantile(0.25)
 
 
-def valrange(x):
-    """
-    Function for getting the value range
-    """
-    return x.max() - x.min()
-
-
 def aggregate_wrapper(data, group, metadata_columns=[]):
     """
     Wrapper function to wrap feature data
@@ -123,7 +116,7 @@ def aggregate_wrapper(data, group, metadata_columns=[]):
             .groupby(group)\
             .agg([np.max,
                   np.median,
-                  valrange, iqr])
+                  iqr])
         agg_feature_cols = []
         for feat, agg in feature_mapping[gait_sequence].columns:
             agg_feature_cols.append("{}_{}"
@@ -178,9 +171,9 @@ def main():
                      'table_version', 'test_type',
                      'error_type', "healthCode"]
     demo_data = query.get_file_entity(
-        syn, data_dict["DEMOGRAPHIC_DATA_SYNID"])
+        syn, DATA_DICT["DEMOGRAPHIC_DATA_SYNID"])
     results_group_data = pd.DataFrame()
-    for _, synId in data_dict["FEATURE_DATA_SYNIDS"].items():
+    for _, synId in DATA_DICT["FEATURE_DATA_SYNIDS"].items():
         data = query.get_file_entity(syn, synId)
         for test_type in data["test_type"].unique():
             subset = data[data["test_type"] == test_type]
@@ -202,20 +195,20 @@ def main():
         gc.collect()
 
     used_script_url = query.get_git_used_script_url(
-        path_to_github_token=data_dict["OUTPUT_INFO"]["PATH_GITHUB_TOKEN"],
-        proj_repo_name=data_dict["OUTPUT_INFO"]["PROJ_REPO_NAME"],
+        path_to_github_token=DATA_DICT["OUTPUT_INFO"]["TOKEN_PATH"],
+        proj_repo_name=DATA_DICT["OUTPUT_INFO"]["PROJ_REPO"],
         script_name=__file__)
 
     query.save_data_to_synapse(
         syn=syn,
         data=results_group_data,
         source_table_id=[synid for key, synid in
-                         data_dict["FEATURE_DATA_SYNIDS"].items()]
-        + [data_dict["DEMOGRAPHIC_DATA_SYNID"]],
+                         DATA_DICT["FEATURE_DATA_SYNIDS"].items()]
+        + [DATA_DICT["DEMOGRAPHIC_DATA_SYNID"]],
         used_script=used_script_url,
         output_filename=("grouped_%s_features.csv" %
                          (args.group)),
-        data_parent_id="syn21537421")
+        data_parent_id=DATA_DICT["PARENT_SYN_ID"])
 
 
 if __name__ == '__main__':
