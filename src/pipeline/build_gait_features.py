@@ -58,7 +58,7 @@ def read_args():
     parser.add_argument("--partition", default=250,
                         help="Number of sample per partition,\
                             no negative number")
-    parser.add_argument("--filter", default=False,
+    parser.add_argument("--filter", default="store_true",
                         help="filter on cadence")
     args = parser.parse_args()
     return args
@@ -223,7 +223,11 @@ def main():
         if args.filter:
             data = annotate_consecutive_zeros(data, "AA_cadence")
             data = data[data["consec_zero_cadence"] < ZERO_CADENCE_CUTOFF]
+            output_filename = "filtered_%s_gait_features.csv" % version
+        else:
+            output_filename = "%s_gait_features.csv" % version
 
+        # save data to synapse
         query.save_data_to_synapse(
             syn=syn,
             data=data,
@@ -232,7 +236,7 @@ def main():
                 proj_repo_name=DATA_DICT["OUTPUT_INFO"]["PROJ_REPO"],
                 script_name=__file__),
             source_table_id=DATA_DICT[version]["SYN_ID"],
-            output_filename="%s_gait_features.csv" % version,
+            output_filename=output_filename,
             data_parent_id=DATA_DICT["OUTPUT_INFO"]["PARENT_SYN_ID"])
 
         # clear data from memory
