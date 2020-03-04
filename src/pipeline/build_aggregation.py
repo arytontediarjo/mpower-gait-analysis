@@ -24,13 +24,13 @@ from utils import query_utils as query
 # global variables
 DATA_DICT = {
     "FEATURE_DATA_SYNIDS": {
-        "MPOWER_V1": "syn21597373",
-        "MPOWER_V2": "syn21597625",
-        "MPOWER_PASSIVE": "syn21597842",
-        "ELEVATE_MS": "syn21597862"},
+        "MPOWER_V1": "syn21676844",
+        "MPOWER_V2": "syn21676845",
+        "MPOWER_PASSIVE": "syn21676847",
+        "ELEVATE_MS": "syn21676849"},
     "DEMOGRAPHIC_DATA_SYNID": "syn21602828",
     "OUTPUT_INFO": {
-        "PARENT_SYN_ID": "syn21592268",
+        "PARENT_SYN_ID": "syn21537421",
         "PROJ_REPO": "mpower-gait-analysis",
         "TOKEN_PATH": "~/git_token.txt"}
 }
@@ -206,9 +206,9 @@ def main():
                          DATA_DICT["FEATURE_DATA_SYNIDS"].items()]
         + [DATA_DICT["DEMOGRAPHIC_DATA_SYNID"]],
         used_script=used_script_url,
-        output_filename=("grouped_%s_features.csv" %
+        output_filename=("filtered_grouped_%s_features.csv" %
                          (args.group)),
-        data_parent_id=DATA_DICT["PARENT_SYN_ID"])
+        data_parent_id=DATA_DICT["OUTPUT_INFO"]["PARENT_SYN_ID"])
 
 
 if __name__ == '__main__':

@@ -58,7 +58,7 @@ def read_args():
     parser.add_argument("--partition", default=250,
                         help="Number of sample per partition,\
                             no negative number")
-    parser.add_argument("--filter", default="store_true",
+    parser.add_argument("--filter", action="store_true",
                         help="filter on cadence")
     args = parser.parse_args()
     return args
