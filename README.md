@@ -26,13 +26,16 @@ This project utilizes the gait signal data that is taken during the mPower walki
 
 ### 1. Create Docker Environment:
 
+To build a container of the project, go to the project repository and create an image of the required dependencies by building a docker image. 
 
-a. Build Docker Image
+#### Build the Docker Image
 ``` 
 docker build -t gait-analysis-jupyter-image .
 ```
 
-b. Run Docker Container
+To get into the pipeline environment a python wrapper has been created for ease of use. Run the command below to execute the Makefile commands that will run the Docker wrapper script.
+
+#### Run the Docker Container
 ```
 make container 
 ```
@@ -72,7 +75,7 @@ make aggregate
 
 
 ## Accessing Jupyter Notebooks
-
+ 
 a. Jupyter Notebook
 ```
 jupyter notebook
@@ -83,15 +86,13 @@ b. Jupyter Lab
 jupyter lab
 ```
 
-After running the jupyter commands, click the link to run jupyter notebook server in your browser of choice. 
+To access and edit the analysis in jupyter notebook, user can type in jupyter lab/notebook as a shell command. Afterwards, a link will appear in which user will click the link to run jupyter notebook server in browser of choice.
 
 
 **Notes in running jupyter server in EC2 instance:**
 
-To run jupyter server in EC2 instance, an SSH tunnelling from your local computer to the ec2 is required. Thus, running this command will give you access jupyter server instantiated in the instance and use it in your local browser. 
+To run jupyter server in EC2 instance, an SSH tunnelling from your local computer to the ec2 is required. Thus, running the command below in local bash terminal will give user tunnel access to the jupyter notebook ran in an ec2 instance, using browser of choice as its interface. 
+
 ```
 ssh -NfL 8888:localhost:8888 ec2
 ```
-
-
-
