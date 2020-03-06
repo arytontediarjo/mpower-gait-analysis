@@ -4,9 +4,11 @@
 
 PROJECT_NAME = mpower-gait-analysis
 PYTHON_INTERPRETER = python
-	
+CORES     = 16
+PARTITION = 250
+
 #################################################################################
-# COMMANDS                                                                      #
+# PIPELINE COMMANDS                                                             #
 #################################################################################
 
 # Container setting
@@ -15,7 +17,13 @@ container:
 
 ## Make Dataset
 data: 
-	$(PYTHON_INTERPRETER) src/pipeline/build_gait_features.py 
+	$(PYTHON_INTERPRETER) src/pipeline/build_gait_features.py \
+	--cores $(CORES) --partition $(PARTITION)
+
+## Update dataset only based on new recordId
+update:
+	$(PYTHON_INTERPRETER) src/pipeline/build_gait_features.py \
+	--update --cores $(CORES) --partition $(PARTITION)
 
 ## Make Demographics
 demographics:
@@ -26,11 +34,12 @@ aggregate:
 	$(PYTHON_INTERPRETER) src/pipeline/build_aggregation.py --group recordId
 	$(PYTHON_INTERPRETER) src/pipeline/build_aggregation.py --group healthCode
 
-## Update dataset only based on new recordId
-update:
-	$(PYTHON_INTERPRETER) src/pipeline/build_gait_features.py --update
+
+#################################################################################
+# ADDITIONAL COMMANDS                                                             #
+#################################################################################
 	
-## Delete all compiled Python files and files in synapseCache
+## Delete all compiled Python files and files in synapseCache for saving memory
 clean:
 	find . -type f -name "*.py[co]" -delete
 	find . -type d -name "__pycache__" -delete
