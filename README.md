@@ -21,39 +21,77 @@ This project utilizes the gait signal data that is taken during the mPower walki
 4. [Freeze of Gait Docs](https://ieeexplore.ieee.org/document/5325884)
 
 
-## How-to-use:
+## Data Pipeline (HOW-TO):
 
 
-### 1. Create Environment:
+### 1. Create Docker Environment:
 
-#### a. Using pip
-```
-make requirements
-```
 
-#### b. Using Docker
-
-```
-docker build -t <name of docker image> .
-docker run -v <path-local-volume>:<path-to-designated-volume-location> -it --rm <name-of-image> /bin/bash
+a. Build Docker Image
+``` 
+docker build -t gait-analysis-jupyter-image .
 ```
 
-### 2. Create Featurized Data:
+b. Run Docker Container
+```
+make container 
+```
+
+Running make container command will prompt user to enter credentials to synapseClient so that it will be saved to the container environment. It will also prompt user to insert the absolute filepaths to the .synapseCache.
+
+
+
+**Notes on mounting .synapseCache volume to Docker container:**
+
+In mounting volumes of downloaded files from .synapseCache to the docker container, an absolute filepath of file in the synapseCache locally will be mapped entirely into the Docker container. This is done as synapseclient only considers file to have the same md5 if their absolute paths are similar in their logged .cachemap file.
+
+
+
+### 2. Generate featurized data:
 ```
 make data
 ```
 
-### 3. Update Data:
+
+### 3. Update data with new records:
 ```
 make update
 ```
 
-### 4. Query Cleaned Gait User Demographics:
+
+### 4. Generate cleaned demographics information:
 ```
 make demographics
 ```
 
-### 5. Retrieve Aggregated Features:
+### 5. Aggregate featurized data:
+
 ```
 make aggregate
 ```
+
+
+## Accessing Jupyter Notebooks
+
+a. Jupyter Notebook
+```
+jupyter notebook
+```
+
+b. Jupyter Lab
+```
+jupyter lab
+```
+
+After running the jupyter commands, click the link to run jupyter notebook server in your browser of choice. 
+
+
+**Notes in running jupyter server in EC2 instance:**
+
+To run jupyter server in EC2 instance, an SSH tunnelling from your local computer to the ec2 is required. Thus, running this command will give you access jupyter server instantiated in the instance and use it in your local browser. 
+```
+ssh -NfL 8888:localhost:8888 ec2
+```
+
+
+
