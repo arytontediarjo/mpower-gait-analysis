@@ -2,13 +2,10 @@
 
 This project is a part of Sage Bionetworks mHeatlh Tools, authored by Aryton Tediarjo (mHealth Analytics Co-op) and Larsson Omberg (VP of Systems Biology). This repo will cover steps from data querying processes, data featurization, analysis and classification of Treatment (Multiple Sclerosis and Parkinsons) of Control groups using their gait features. 
 
-#### -- Project Status: [Work In Progress]
-
 
 ## Project Description
 
 This project utilizes the gait signal data that is taken during the mPower walking/balance tests. It uses featurization process based on PDKit module, and automatic rotation-detection in gait. 
-
 
 
 ## References:
@@ -22,6 +19,11 @@ This project utilizes the gait signal data that is taken during the mPower walki
 
 
 ## Data Pipeline (HOW-TO):
+
+
+### Utilizing Makefile:
+
+For ease of use, all pipeline functionalities have been encapsulated into make commands listed in the Makefile, pipeline parameters can also be changed in the Makefile (number of cores, number of partition, featurization parameter). Thus, for any future work or changes, refer to the Makefile for any changes. 
 
 
 ### 1. Create Docker Environment:
