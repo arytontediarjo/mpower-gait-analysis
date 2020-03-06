@@ -3,9 +3,10 @@
 #################################################################################
 
 PROJECT_NAME = mpower-gait-analysis
-PYTHON_INTERPRETER = python
+PYTHON_INTERPRETER = python3
 CORES     = 16
 PARTITION = 250
+
 
 #################################################################################
 # PIPELINE COMMANDS                                                             #
@@ -13,7 +14,7 @@ PARTITION = 250
 
 # Container setting
 container:
-	$(PYTHON_INTERPRETER) src/docker_wrapper.py
+	$(PYTHON_INTERPRETER) src/docker_wrapper.py 
 
 ## Make Dataset
 data: 
