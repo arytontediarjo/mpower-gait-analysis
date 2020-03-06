@@ -9,6 +9,7 @@ from __future__ import unicode_literals
 
 # import standard libraries
 import time
+import os
 import argparse
 import pandas as pd
 import numpy as np
@@ -34,7 +35,6 @@ DATA_DICT = {
         "PROJ_REPO": "mpower-gait-analysis",
         "TOKEN_PATH": "~/git_token.txt"}
 }
-syn = sc.login()
 
 
 def read_args():
@@ -165,7 +165,13 @@ def main():
     using aggregation based on interquartiles,
     value ranges, median and abs max.
     """
+
     args = read_args()
+    syn = sc.Synapse(
+        configPath=os.path.join(
+            os.getenv("HOME"),
+            "mpower-gait-analysis/.synapseConfig"))
+    syn.login()
     metadata_cols = ['appVersion', 'createdOn',
                      'phoneInfo', 'recordId',
                      'table_version', 'test_type',

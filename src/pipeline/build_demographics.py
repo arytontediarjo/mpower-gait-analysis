@@ -10,6 +10,7 @@ from __future__ import unicode_literals
 
 # import standard libraries
 import time
+import os
 import pandas as pd
 import numpy as np
 
@@ -32,7 +33,6 @@ DATA_DICT = {
         "PROJ_REPO": "mpower-gait-analysis",
         "TOKEN_PATH": "~/git_token.txt"}
 }
-syn = sc.login()
 
 
 def generate_gait_demographic(syn):
@@ -151,6 +151,14 @@ def main():
           as we dont want to combine both in analysis
     """
 
+    # retrieve synapse credential through config
+    syn = sc.Synapse(
+        configPath=os.path.join(
+            os.getenv("HOME"),
+            "mpower-gait-analysis/.synapseConfig"))
+    syn.login()
+
+    # process metadata from synapse table
     metadata = generate_gait_demographic(syn)
 
     # get this script git blob URL
@@ -159,6 +167,7 @@ def main():
         proj_repo_name=DATA_DICT["OUTPUT_INFO"]["PROJ_REPO"],
         script_name=__file__)
 
+    # save data to synapse
     query.save_data_to_synapse(
         syn=syn,
         data=metadata,

@@ -1,19 +1,15 @@
 # base image
-FROM amancevice/pandas:0.23.4-python3
+FROM jupyter/scipy-notebook:latest
 
 # updating repository
-RUN git clone https://github.com/arytontediarjo/mpower-gait-analysis.git /root/mpower-gait-analysis
+RUN git clone https://github.com/arytontediarjo/mpower-gait-analysis.git /home/jovyan/mpower-gait-analysis
 
-# remove later
-COPY .synapseConfig /root/.synapseConfig
+COPY requirements.txt /home/jovyan/mpower-gait-analysis/requirements.txt
+
+COPY Makefile /home/jovyan/mpower-gait-analysis/Makefile
 
 # upgrade pip
-RUN /usr/local/bin/python -m pip install --upgrade pip
-
-# install setups
-RUN pip install -U pip setuptools wheel
+RUN pip install --upgrade pip
 
 # pip install 
-RUN pip install -r /root/mpower-gait-analysis/requirements.txt
-
-
+RUN pip install -r /home/jovyan/mpower-gait-analysis/requirements.txt

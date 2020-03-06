@@ -15,6 +15,7 @@ from __future__ import unicode_literals
 
 # import standard library
 import time
+import os
 import gc
 import argparse
 import multiprocessing
@@ -41,7 +42,6 @@ DATA_DICT = {"MPOWER_V1": {"SYN_ID": "syn10308918",
                              "PROJ_REPO": "mpower-gait-analysis",
                              "TOKEN_PATH": "~/git_token.txt"}
              }
-syn = sc.login()
 
 
 def read_args():
@@ -95,7 +95,7 @@ def featurize_wrapper(data):
     return data
 
 
-def standardize_mpower_data(values):
+def standardize_mpower_data(syn, values):
     """
     Helper function for concatenating several synapse table columns into
     standardized name with annotation of which test it conducts,
@@ -111,6 +111,7 @@ def standardize_mpower_data(values):
         on each recordIds for persisting test information
 
     Args:
+        syn (synapseclient object)
         values (type: dict): A value from a dictionary containing
         synId and table version of queried mPower data from synapseTable
 
@@ -188,8 +189,19 @@ def main():
     Takes in data from mPower Gait Tables and parsed
     through featurization tools in the repo /utils
     """
+
+    # read arguments
     args = read_args()
-    all_data = pd.concat([standardize_mpower_data(values) for key,
+
+    # retrieve synapse credential through config
+    syn = sc.Synapse(
+        configPath=os.path.join(
+            os.getenv("HOME"),
+            "mpower-gait-analysis/.synapseConfig"))
+    syn.login()
+
+    # concat all data into consistenf format
+    all_data = pd.concat([standardize_mpower_data(syn, values) for key,
                           values in DATA_DICT.items()
                           if key != "OUTPUT_INFO"]).reset_index(drop=True)
 
