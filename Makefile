@@ -4,33 +4,14 @@
 
 PROJECT_NAME = mpower-gait-analysis
 PYTHON_INTERPRETER = python
-
-# source volume to volume in docker should be the same as 
-# cached file in cache map is based on absolute path to the file itself
-# this is subject to improvement
-SOURCE_VOLUME = ~/.synapseCache
-TARGET_VOLUME = /home/ec2-user/.synapseCache
-
-
-
-#########################
-# CREDENTIALS			#
-#########################
-
-# rule in making .synapseConfig
-credentials:
-	$(PYTHON_INTERPRETER) src/config_wrapper.py 
 	
 #################################################################################
 # COMMANDS                                                                      #
 #################################################################################
 
-## Make container using jupyter image, exposed to port for notebook access
-## and using mounted volume for 
-run_docker:
-	docker run --rm -p 8888:8888 \
-	-v $(SOURCE_VOLUME):$(TARGET_VOLUME) \
-	-it gait-analysis-jupyter-image /bin/bash
+# Container setting
+container:
+	$(PYTHON_INTERPRETER) src/docker_wrapper.py
 
 ## Make Dataset
 data: 
