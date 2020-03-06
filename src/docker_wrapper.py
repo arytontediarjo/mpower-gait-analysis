@@ -1,8 +1,24 @@
+"""
+Script to create Jupyter Stacks docker container
+with mounted volume to synapeCache (absolute path),
+will require user input for credentials and
+caching instructions
+"""
+
 import configparser
 import os
 
 
 def build_synapse_config(path, config_dict):
+    """
+    function to write in .synapseConfig inside the
+    project directory, will be used to store
+    credentials and caching information
+
+    Args:
+        path (type = string) = path to synapseConfig
+        config_dict (type = dictionary) = mapped sections in config
+    """
     config = configparser.ConfigParser()
     for section in config_dict.keys():
         config.add_section(section)
