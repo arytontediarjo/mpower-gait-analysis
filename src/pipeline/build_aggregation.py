@@ -167,11 +167,14 @@ def main():
     """
 
     args = read_args()
-    syn = sc.Synapse(
-        configPath=os.path.join(
-            os.getenv("HOME"),
-            "mpower-gait-analysis/.synapseConfig"))
-    syn.login()
+    # retrieve synapse credential through config
+    path = os.path.join(os.getenv("HOME"),
+                        "mpower-gait-analysis/.synapseConfig")
+    syn = sc.Synapse(configPath=path)
+    syn.login(os.getenv("syn_username"),
+              os.getenv("syn_password"),
+              rememberMe=True)
+
     metadata_cols = ['appVersion', 'createdOn',
                      'phoneInfo', 'recordId',
                      'table_version', 'test_type',

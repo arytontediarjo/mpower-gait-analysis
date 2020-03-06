@@ -128,5 +128,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# vscode
+# additional files to ignore
 .vscode
+.synapseConfig

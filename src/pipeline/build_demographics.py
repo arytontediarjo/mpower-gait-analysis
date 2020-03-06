@@ -152,11 +152,12 @@ def main():
     """
 
     # retrieve synapse credential through config
-    syn = sc.Synapse(
-        configPath=os.path.join(
-            os.getenv("HOME"),
-            "mpower-gait-analysis/.synapseConfig"))
-    syn.login()
+    path = os.path.join(os.getenv("HOME"),
+                        "mpower-gait-analysis/.synapseConfig")
+    syn = sc.Synapse(configPath=path)
+    syn.login(os.getenv("syn_username"),
+              os.getenv("syn_password"),
+              rememberMe=True)
 
     # process metadata from synapse table
     metadata = generate_gait_demographic(syn)

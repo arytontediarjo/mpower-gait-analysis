@@ -35,9 +35,6 @@ def main():
     cache_path = input("Enter cache path: ")
 
     config_dict = {
-        "authentication": {
-            "username": syn_username,
-            "password": syn_password},
         "cache": {
             "location": cache_path}
     }
@@ -48,11 +45,12 @@ def main():
     build_synapse_config(config_path, config_dict)
 
     # create docker
-    os.system("docker run --rm -p 8888:8888 \
+    os.system("docker run --rm -e syn_username={} -e syn_password={} -p 8888:8888 \
         -v {}:/home/jovyan/mpower-gait-analysis/.synapseConfig \
         -v {}:{} \
         -it gait-analysis-jupyter-image /bin/bash"
-              .format(config_path, cache_path, cache_path))
+              .format(syn_username, syn_password,
+                      config_path, cache_path, cache_path))
 
 
 if __name__ == '__main__':
