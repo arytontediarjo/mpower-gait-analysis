@@ -23,7 +23,7 @@ This project utilizes the gait signal data that is taken during the mPower walki
 
 ### Utilizing Makefile:
 
-For ease of use, all pipeline functionalities have been encapsulated into make commands listed in the Makefile, pipeline parameters can also be changed in the Makefile (number of cores, number of partition, featurization parameter). Thus, for any future work or changes, refer to the Makefile for any changes. 
+For ease of use, all pipeline functionalities have been encapsulated into make commands listed in the Makefile, pipeline parameters can also be changed in the Makefile (number of cores, number of partition, featurization parameter). Thus, for any future work or changes, you can change the parameter variable through the Makefile.
 
 
 ### 1. Create Docker Environment:
@@ -53,38 +53,38 @@ In mounting volumes of downloaded files from .synapseCache to the docker contain
 
 
 ### 2. Generate featurized data:
-```
+```bat
 make data
 ```
 
 
 ### 3. Update data with new records:
-```
+```bat
 make update
 ```
 
 
 ### 4. Generate cleaned demographics information:
-```
+```bat
 make demographics
 ```
 
 ### 5. Aggregate featurized data:
 
-```
+```bat
 make aggregate
 ```
 
 
 ## Accessing Jupyter Notebooks
  
-a. Jupyter Notebook
-```
+#### Jupyter Notebook
+```bat
 jupyter notebook
 ```
 
-b. Jupyter Lab
-```
+#### Jupyter Lab
+```bat
 jupyter lab
 ```
 
@@ -95,6 +95,6 @@ To access and edit the analysis in jupyter notebook, user can type in jupyter la
 
 To run jupyter server in EC2 instance, an SSH tunnelling from your local computer to the ec2 is required. Thus, running the command below in local bash terminal will give user tunnel access to the jupyter notebook ran in an ec2 instance, using browser of choice as its interface. 
 
-```
+```bat
 ssh -NfL 8888:localhost:8888 ec2
 ```
