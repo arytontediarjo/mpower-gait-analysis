@@ -7,6 +7,7 @@ caching instructions
 
 import configparser
 import os
+import multiprocessing
 
 
 def build_synapse_config(path, config_dict):
@@ -33,7 +34,6 @@ def main():
     syn_username = input("Enter synapse username: ")
     syn_password = input("Enter synapse password: ")
     cache_path = input("Enter cache path: ")
-
     config_dict = {
         "cache": {
             "location": cache_path}
@@ -46,10 +46,12 @@ def main():
 
     # create docker
     os.system("docker run --rm -e syn_username={} -e syn_password={} -p 8888:8888 \
+        --cpus {} \
         -v {}:/home/jovyan/mpower-gait-analysis/.synapseConfig \
         -v {}:{} \
         -it gait-analysis-jupyter-image /bin/bash"
               .format(syn_username, syn_password,
+                      multiprocessing.cpu_count(),
                       config_path, cache_path, cache_path))
 
 
