@@ -550,6 +550,8 @@ class GaitFeaturize:
             feature_dict["%s_stride_regularity" % axis] = stride_regularity
             feature_dict["%s_symmetry" % axis] = symmetry
         feature_dict["window_size"] = window_duration
+        feature_dict["window_start"] = window_start
+        feature_dict["window_end"] = window_end
         return feature_dict
 
     def _resample_signal(self, dataframe):
