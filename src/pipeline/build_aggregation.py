@@ -169,7 +169,7 @@ def main():
     args = read_args()
     # retrieve synapse credential through config
     path = os.path.join(os.getenv("HOME"),
-                        "mpower-gait-analysis/.synapseConfig")
+                        ".synapseConfig")
     syn = sc.Synapse(configPath=path)
     syn.login(os.getenv("syn_username"),
               os.getenv("syn_password"),

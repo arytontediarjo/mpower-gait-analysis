@@ -47,7 +47,7 @@ def main():
     # create docker
     os.system("docker run --rm -e syn_username={} -e syn_password={} -p 8888:8888 \
         --cpus {} \
-        -v {}:/home/jovyan/mpower-gait-analysis/.synapseConfig \
+        -v {}:/home/jovyan/.synapseConfig \
         -v {}:{} \
         -it gait-analysis-jupyter-image /bin/bash"
               .format(syn_username, syn_password,
