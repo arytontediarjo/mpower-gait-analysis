@@ -45,7 +45,7 @@ def main():
     build_synapse_config(config_path, config_dict)
 
     # create docker
-    os.system("docker run --rm -e syn_username={} -e syn_password={} -p 8888:8888 \
+    os.system("docker run -e syn_username={} -e syn_password={} -p 8888:8888 \
         --cpus {} \
         -v {}:/home/jovyan/.synapseConfig \
         -v {}:{} \

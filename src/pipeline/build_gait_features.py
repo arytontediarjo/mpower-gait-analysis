@@ -29,7 +29,6 @@ from utils import gait_features_utils as gf_utils
 
 
 # GLOBAL VARIABLES
-ZERO_CADENCE_CUTOFF = 5  # can change later
 DATA_DICT = {"MPOWER_V1": {"SYN_ID": "syn10308918",
                            "TABLE_VERSION": "MPOWER_V1"},
              "MPOWER_V2": {"SYN_ID": "syn12514611",
@@ -62,24 +61,6 @@ def read_args():
                         help="filter on cadence")
     args = parser.parse_args()
     return args
-
-
-def annotate_consecutive_zeros(data, feature):
-    """
-    Function to annotate consecutive zeros in a dataframe
-    Args:
-        data (type: pd.DataFrame)    : dataframe
-        feature : feature to assess on counting consecutive zeros
-    returns:
-        A new column-series of data with counted
-        consecutive zeros (if available)
-    """
-    step_shift_measure = data[feature].ne(data[feature].shift()).cumsum()
-    counts = data\
-        .groupby(['recordId', step_shift_measure])[feature]\
-        .transform('size')
-    data['consec_zero_cadence'] = np.where(data[feature].eq(0), counts, 0)
-    return data
 
 
 def featurize_wrapper(data):
@@ -147,6 +128,30 @@ def standardize_mpower_data(syn, values):
         [values for key, values in data_dict.items()]).reset_index(drop=True)
     concat_data["table_version"] = table_version
     return concat_data
+
+
+# TODO: TEST FUNCTION (FIX IF WORKS)
+def segment_gait_sequence(data,
+                          loco_threshold,
+                          energy_threshold):
+    """
+    Utility function to segment gait data
+    """
+    # validate further edge cases of just white noise
+    data["y_energy_freeze_index"] = data["y_energy_freeze_index"]\
+        .fillna(energy_threshold+1)
+    data["gait_segment"] = np.where(
+        (((data["y_loco_freeze_index"] < loco_threshold) |
+          (data["y_energy_freeze_index"] > energy_threshold))
+         & (data["window_size"] >= 5)), "rest", "walk"
+    )
+    data["gait_segment"] = np.where(
+        ((data["rotation_omega"] > 0)
+         & (data["gait_segment"] == "walk")),
+        "rotation",
+        data["gait_segment"]
+    )
+    return data
 
 
 def normalize_feature_sets(data, target_feature):
@@ -234,9 +239,10 @@ def main():
 
         # remove consecutive zeros based on predefined parameters
         if args.filter:
-            data = annotate_consecutive_zeros(data, "AA_cadence")
-            data = data[data["consec_zero_cadence"] < ZERO_CADENCE_CUTOFF]
-            output_filename = "filtered_%s_gait_features.csv" % version
+            data = segment_gait_sequence(data,
+                                         loco_threshold=0.02,
+                                         energy_threshold=6)
+            output_filename = "annotated_%s_gait_features.csv" % version
         else:
             output_filename = "%s_gait_features.csv" % version
 
