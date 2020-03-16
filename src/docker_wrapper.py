@@ -1,8 +1,10 @@
 """
 Script to create Jupyter Stacks docker container
 with mounted volume to synapeCache (absolute path),
-will require user input for credentials and
-caching instructions
+will require user input for credentials,
+absolute filepath to synapseCache,
+and absolute filepath to git token credentials
+for updating provenance in synapse
 """
 
 import configparser
@@ -33,10 +35,11 @@ def build_synapse_config(path, config_dict):
 def main():
     syn_username = input("Enter synapse username: ")
     syn_password = input("Enter synapse password: ")
-    cache_path = input("Enter cache path: ")
+    synapse_cache_path = input("Enter cache path: ")
+    git_token_path = input("Enter filepath to git token: ")
     config_dict = {
         "cache": {
-            "location": cache_path}
+            "location": synapse_cache_path}
     }
     config_path = \
         os.path.join(os.path.dirname(os.getcwd()),
@@ -48,11 +51,14 @@ def main():
     os.system("docker run -e syn_username={} -e syn_password={} -p 8888:8888 \
         --cpus {} \
         -v {}:/home/jovyan/.synapseConfig \
+        -v {}:/home/jovyan/git_token \
         -v {}:{} \
         -it gait-analysis-jupyter-image /bin/bash"
               .format(syn_username, syn_password,
                       multiprocessing.cpu_count()/2,
-                      config_path, cache_path, cache_path))
+                      config_path, git_token_path,
+                      synapse_cache_path,
+                      synapse_cache_path))
 
 
 if __name__ == '__main__':
