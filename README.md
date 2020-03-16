@@ -56,15 +56,20 @@ In mounting volumes of downloaded files from .synapseCache to the docker contain
 
 
 ### 2. Generate featurized data:
+
 ```bat
 make data
 ```
+
+Running this make command will featurize all gait data in synapse database.
 
 
 ### 3. Update data with new records:
 ```bat
 make update
 ```
+
+Running this make command will update featurized data by comparing new recordId (unique identifier) with kept records (unique identifier) and append to the feature data with  new recordId.
 
 
 ### 4. Generate cleaned demographics information:
@@ -77,6 +82,8 @@ make demographics
 ```bat
 make aggregate
 ```
+Running this command will aggregate all data by its recordId and healthcodes. 
+Each Features will be aggregated by interquartiles and median.
 
 
 ## Accessing Jupyter Notebooks
