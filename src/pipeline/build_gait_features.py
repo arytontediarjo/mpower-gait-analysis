@@ -57,8 +57,6 @@ def read_args():
     parser.add_argument("--partition", default=250,
                         help="Number of sample per partition,\
                             no negative number")
-    parser.add_argument("--filter", action="store_true",
-                        help="filter on cadence")
     args = parser.parse_args()
     return args
 
@@ -237,14 +235,10 @@ def main():
         data = data[[feat for feat in data.columns if (
             "filepath" not in feat)]]
 
-        # remove consecutive zeros based on predefined parameters
-        if args.filter:
-            data = segment_gait_sequence(data,
-                                         loco_threshold=0.02,
-                                         energy_threshold=6)
-            output_filename = "annotated_%s_gait_features.csv" % version
-        else:
-            output_filename = "%s_gait_features.csv" % version
+        data = segment_gait_sequence(data,
+                                     loco_threshold=0.02,
+                                     energy_threshold=6)
+        output_filename = "annotated_%s_gait_features.csv" % version
 
         # save data to synapse
         query.save_data_to_synapse(
