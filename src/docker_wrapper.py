@@ -51,7 +51,7 @@ def main():
     os.system("docker run -e syn_username={} -e syn_password={} -p 8888:8888 \
         --cpus {} \
         -v {}:/home/jovyan/.synapseConfig \
-        -v {}:/home/jovyan/git_token \
+        -v {}:/home/jovyan/git_token.txt \
         -v {}:{} \
         -it gait-analysis-jupyter-image /bin/bash"
               .format(syn_username, syn_password,
