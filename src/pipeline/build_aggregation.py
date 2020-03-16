@@ -25,10 +25,10 @@ from utils import query_utils as query
 # global variables
 DATA_DICT = {
     "FEATURE_DATA_SYNIDS": {
-        "MPOWER_V1": "syn21676844",
-        "MPOWER_V2": "syn21676845",
-        "MPOWER_PASSIVE": "syn21676847",
-        "ELEVATE_MS": "syn21676849"},
+        "MPOWER_V1": "syn21765655",
+        "MPOWER_V2": "syn21765659",
+        "MPOWER_PASSIVE": "syn21765662",
+        "ELEVATE_MS": "syn21765671"},
     "DEMOGRAPHIC_DATA_SYNID": "syn21602828",
     "OUTPUT_INFO": {
         "PARENT_SYN_ID": "syn21537421",
@@ -100,13 +100,14 @@ def aggregate_wrapper(data, group, metadata_columns=[]):
         Returns grouped healthcodes features
     """
 
+    data = data[data["gait_segment"] != "rest"]
+
     # groupby features based on several aggregation
     feature_mapping = {"nonrot_data":
-                       data[data["rotation_omega"]
-                            .isnull()].drop("rotation_omega", axis=1),
+                       data[(data["gait_segment"] == "walk") & (data["window_size"] >= 5)]\
+                               .drop("rotation_omega", axis = 1),
                        "rot_data":
-                       data[~data["rotation_omega"]
-                            .isnull()][[group, "rotation_omega"]]
+                       data[data["gait_segment"] == "rotation"][[group, "rotation_omega"]]
                        }
     for gait_sequence, feature_data in feature_mapping.items():
         feature_cols = [feat for feat in feature_data.columns if
@@ -116,6 +117,7 @@ def aggregate_wrapper(data, group, metadata_columns=[]):
             .groupby(group)\
             .agg([np.max,
                   np.median,
+                  np.std,
                   iqr])
         agg_feature_cols = []
         for feat, agg in feature_mapping[gait_sequence].columns:
