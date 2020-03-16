@@ -23,7 +23,9 @@ This project utilizes the gait signal data that is taken during the mPower walki
 
 ### Utilizing Makefile:
 
-For ease of use, all pipeline functionalities have been encapsulated into make commands listed in the Makefile, pipeline parameters can also be changed in the Makefile (number of cores, number of partition, featurization parameter). Thus, for any future work or changes, you can change the parameter variable through the Makefile.
+For ease of use, all pipeline functionalities have been encapsulated into make commands listed in the Makefile, pipeline parameters can also be changed in the Makefile (number of cores, number of partition, featurization parameter). 
+
+Thus, for any future work or changes, you can change the parameter variable through the Makefile.
 
 
 ### 1. Create Docker Environment:
@@ -42,8 +44,9 @@ To get into the pipeline environment a python wrapper has been created for ease 
 make container 
 ```
 
-Running make container command will prompt user to enter credentials to synapseClient so that it will be saved to the container environment. It will also prompt user to insert the absolute filepaths to the .synapseCache.
+When this command is being ran, it will expose docker container to port 8888 so that we can ssh our browser to the jupyter notebook ran inside the container. 
 
+Several synapse credentials question will be asked to access the container (synapse username, and synapse password). Additionally it will prompt user to input absolute filepaths of .synapsecache for faster feature query and absolute filepaths to token for updating synapse provenance. 
 
 
 **Notes on mounting .synapseCache volume to Docker container:**
@@ -53,15 +56,20 @@ In mounting volumes of downloaded files from .synapseCache to the docker contain
 
 
 ### 2. Generate featurized data:
+
 ```bat
 make data
 ```
+
+Running this make command will featurize all gait data in synapse database.
 
 
 ### 3. Update data with new records:
 ```bat
 make update
 ```
+
+Running this make command will update featurized data by comparing new recordId (unique identifier) with kept records (unique identifier) and append to the feature data with  new recordId.
 
 
 ### 4. Generate cleaned demographics information:
@@ -74,6 +82,8 @@ make demographics
 ```bat
 make aggregate
 ```
+Running this command will aggregate all data by its recordId and healthcodes. 
+Each Features will be aggregated by interquartiles and median.
 
 
 ## Accessing Jupyter Notebooks
