@@ -19,12 +19,12 @@ container:
 ## Make Dataset
 data: 
 	$(PYTHON_INTERPRETER) src/pipeline/build_gait_features.py \
-	--cores $(CORES) --partition $(PARTITION) --filter
+	--cores $(CORES) --partition $(PARTITION) 
 
 ## Update dataset only based on new recordId
 update:
 	$(PYTHON_INTERPRETER) src/pipeline/build_gait_features.py \
-	--update --cores $(CORES) --partition $(PARTITION) --filter
+	--update --cores $(CORES) --partition $(PARTITION)
 	
 
 ## Make Demographics
