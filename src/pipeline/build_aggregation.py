@@ -103,12 +103,14 @@ def aggregate_wrapper(data, group, metadata_columns=[]):
     data = data[data["gait_segment"] != "rest"]
 
     # groupby features based on several aggregation
-    feature_mapping = {"nonrot_data":
-                       data[(data["gait_segment"] == "walk") & (data["window_size"] >= 5)]\
-                               .drop("rotation_omega", axis = 1),
-                       "rot_data":
-                       data[data["gait_segment"] == "rotation"][[group, "rotation_omega"]]
-                       }
+    feature_mapping = {
+        "nonrot_data":
+        data[(data["gait_segment"] == "walk")
+             & (data["window_size"] >= 5)]
+        .drop("rotation_omega", axis=1),
+        "rot_data":
+        data[data["gait_segment"] == "rotation"][[group, "rotation_omega"]]
+    }
     for gait_sequence, feature_data in feature_mapping.items():
         feature_cols = [feat for feat in feature_data.columns if
                         (feat not in metadata_columns)
