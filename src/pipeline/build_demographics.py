@@ -91,7 +91,8 @@ def generate_gait_demographic(syn):
         .format(DATA_DICT["DEMOGRAPHICS"]["ELEVATE_MS_PROF"]))\
         .asDataFrame()
     demo_data_ems = pd.merge(
-        demo_data_ems, profile_data_ems, how="inner", on="healthCode")
+        demo_data_ems, profile_data_ems,
+        how="inner", on="healthCode")
     demo_data_ems["class"] = demo_data_ems["MS"].map(
         {"ms_patient": "MS", "control": "control"})
 
