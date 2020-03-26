@@ -1,4 +1,4 @@
-# MPower Gait Analysis Project
+# MPower Gait Analysis Project (Sage Bionetworks Internal Use)
 
 This project is a part of Sage Bionetworks mHeatlh Tools, authored by Aryton Tediarjo (mHealth Analytics Co-op) and Larsson Omberg (VP of Systems Biology). This repo will cover steps from data querying processes, data featurization, analysis and classification of Treatment (Multiple Sclerosis and Parkinsons) of Control groups using their gait features. 
 
@@ -46,13 +46,12 @@ make container
 
 When this command is being ran, it will expose docker container to port 8888 so that we can ssh our browser to the jupyter notebook ran inside the container. 
 
-Several synapse credentials question will be asked to access the container (synapse username, and synapse password). Additionally it will prompt user to input absolute filepaths of .synapsecache for faster feature query and absolute filepaths to token for updating synapse provenance. 
+Several synapse credentials question will be asked to access the container (synapse username, and synapse password). Additionally it will prompt user to input absolute filepaths of .synapsecache for faster feature query and absolute filepaths to github authentication token for updating scripts in Synapse Provenance. 
 
 
 **Notes on mounting .synapseCache volume to Docker container:**
 
 In mounting volumes of downloaded files from .synapseCache to the docker container, an absolute filepath of file in the synapseCache locally will be mapped entirely into the Docker container. This is done as synapseclient only considers file to have the same md5 if their absolute paths are similar in their logged .cachemap file.
-
 
 
 ### 2. Generate featurized data:
