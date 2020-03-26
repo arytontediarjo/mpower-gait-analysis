@@ -1,6 +1,13 @@
 """
 Script to group features by healthcodes or recordIds
-with several aggregations
+with several aggregations methods, 
+
+QC Steps:
+-> Removing data of resting inferred from their freeze indexes
+-> Records of less than 5 of each users are not considered
+-> Aggregation will be based on their healthCode and test type,
+so that records from each test e.g passive data and walking data
+will not be mixed up
 """
 
 # import future libraries
