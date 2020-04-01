@@ -452,8 +452,9 @@ class GaitFeaturize:
             4. Locomotor Freeze Index
             5. Average Step/Stride Duration
             6. Std of Step/Stride Duration
-            7. Speed of Gait
-            8. Symmetry
+            7. Step/Stride Regularity
+            8. Speed of Gait
+            9. Symmetry
 
         Args:
             accel_dataframe (type = pd.DataFrame)
@@ -549,6 +550,8 @@ class GaitFeaturize:
             feature_dict["%s_stride_regularity" % axis] = stride_regularity
             feature_dict["%s_symmetry" % axis] = symmetry
         feature_dict["window_size"] = window_duration
+        feature_dict["window_start"] = window_start
+        feature_dict["window_end"] = window_end
         return feature_dict
 
     def _resample_signal(self, dataframe):
