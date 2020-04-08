@@ -1,0 +1,3 @@
+[cache]
+location = /home/ec2-user/.synapseCache/
+
