@@ -55,7 +55,7 @@ def main():
         -v {}:{} \
         -it gait-analysis-jupyter-image /bin/bash"
               .format(syn_username, syn_password,
-                      multiprocessing.cpu_count()/2,
+                      multiprocessing.cpu_count(),
                       config_path, git_token_path,
                       synapse_cache_path,
                       synapse_cache_path))

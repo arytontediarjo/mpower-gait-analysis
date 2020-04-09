@@ -1,6 +1,6 @@
 """
 Script to group features by healthcodes or recordIds
-with several aggregations methods, 
+with several aggregations methods,
 
 QC Steps:
 -> Removing data of resting inferred from their freeze indexes
@@ -124,10 +124,10 @@ def aggregate_wrapper(data, group, metadata_columns=[]):
                         or (feat == group)]
         feature_mapping[gait_sequence] = feature_data[feature_cols]\
             .groupby(group)\
-            .agg([np.max,
-                  np.median,
+            .agg([np.median,
                   np.std,
-                  iqr])
+                  iqr,
+                  ])
         agg_feature_cols = []
         for feat, agg in feature_mapping[gait_sequence].columns:
             agg_feature_cols.append("{}_{}"
