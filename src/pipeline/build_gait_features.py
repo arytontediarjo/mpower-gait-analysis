@@ -149,6 +149,13 @@ def segment_gait_sequence(data,
         "rotation",
         data["gait_segment"]
     )
+
+    data["gait_segment"] = np.where(
+        ~(data["error_type"].isnull()), np.nan, data["gait_segment"])
+
+    data["y_energy_freeze_index"] = np.where(
+        ~(data["error_type"].isnull()), np.nan, data["y_energy_freeze_index"])
+
     return data
 
 
@@ -238,7 +245,8 @@ def main():
         data = segment_gait_sequence(data,
                                      loco_threshold=0.02,
                                      energy_threshold=6)
-        output_filename = "annotated_%s_gait_features.csv" % version
+
+        output_filename = "%s_gait_features.csv" % version
 
         # save data to synapse
         query.save_data_to_synapse(
