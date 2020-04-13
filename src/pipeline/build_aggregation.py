@@ -121,6 +121,7 @@ def aggregate_wrapper(data, group, metadata_columns=[]):
     for gait_sequence, feature_data in feature_mapping.items():
         feature_cols = [feat for feat in feature_data.columns if
                         (feat not in metadata_columns)
+                        or ("window" not in feat)
                         or (feat == group)]
         feature_mapping[gait_sequence] = feature_data[feature_cols]\
             .groupby(group)\
