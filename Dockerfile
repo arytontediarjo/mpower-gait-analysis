@@ -2,7 +2,7 @@
 FROM jupyter/scipy-notebook:latest
 
 # updating repository
-RUN git clone -b reviewed_branch https://github.com/arytontediarjo/mpower-gait-analysis.git /home/jovyan/mpower-gait-analysis
+RUN git clone https://github.com/arytontediarjo/mpower-gait-analysis.git /home/jovyan/mpower-gait-analysis
 
 # upgrade pip
 RUN pip install --upgrade pip
