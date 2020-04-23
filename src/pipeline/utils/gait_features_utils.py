@@ -94,7 +94,8 @@ class GaitFeaturize:
                  window_overlap=0.2,
                  loco_band=[0.5, 3],
                  freeze_band=[3, 8],
-                 sampling_frequency=100
+                 sampling_frequency=100,
+                 time_offset=[0, 30]
                  ):
         self.rotation_frequency_cutoff = rotation_frequency_cutoff
         self.rotation_filter_order = rotation_filter_order
@@ -108,6 +109,7 @@ class GaitFeaturize:
         self.loco_band = loco_band
         self.freeze_band = freeze_band
         self.sampling_frequency = sampling_frequency
+        self.time_offset = time_offset
 
     def get_sensor_data(self, data, sensor):
         """
@@ -131,6 +133,7 @@ class GaitFeaturize:
         if isinstance(data, (type(None), type(np.NaN))):
             return "ERROR: Empty Filepath"
 
+        error_msg_list = []
         try:
             if isinstance(data, str):
                 with open(data) as f:
@@ -154,17 +157,18 @@ class GaitFeaturize:
         # exceptions during data reading
         except (AttributeError, TypeError, FileNotFoundError,
                 MemoryError, KeyError) as err:
-            data = "ERROR: %s" % type(err).__name__
+            error_msg_list.append("ERROR: %s" % type(err).__name__)
         else:
             # check if empty
             if data.empty:
-                data = "ERROR: Filepath has Empty Dataframe"
+                return "ERROR: Filepath has Empty Dataframe"
             elif not (set(data.columns) >= set(["x", "y", "z", "timestamp"])):
-                data = "ERROR: [timestamp, x, y, z] in columns is required"
+                return "ERROR: [timestamp, x, y, z] in columns is required"
+            elif not ((data["timestamp"].iloc[-1] <= self.time_offset[1])
+                      & (data["timestamp"].iloc[0] >= self.time_offset[0])):
+                return "ERROR: Exceed Time Offset"
             else:
-                data = self._format_time_series_data(data)
-        finally:
-            return data
+                return self._format_time_series_data(data)
 
     def _format_time_series_data(self, data):
         """
@@ -186,19 +190,16 @@ class GaitFeaturize:
             td (dtype: float64) : current time difference from zero in seconds
         """
         data = data.dropna(subset=["x", "y", "z"])
+        data["AA"] = np.sqrt(data["x"]**2 + data["y"]**2 + data["z"]**2)
         date_series = pd.to_datetime(data["timestamp"], unit="s")
-        data["td"] = (date_series - date_series.iloc[0]
-                      ).apply(lambda x: x.total_seconds())
+        data["td"] = (date_series - date_series.iloc[0])\
+            .apply(lambda x: x.total_seconds())
+        # create time index timestamp
         data["timestamp"] = data["td"]
         data = data.set_index("timestamp")
         data.index = pd.to_datetime(data.index, unit="s")
-        data["AA"] = np.sqrt(data["x"]**2 + data["y"]**2 + data["z"]**2)
-
-        # some sanity checking
-
         # remove data duplicates
         data = data[~data.index.duplicated(keep='first')]
-
         # sort all indexes
         data = data.sort_index()
         return data[["td", "x", "y", "z", "AA"]]
