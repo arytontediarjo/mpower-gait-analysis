@@ -132,8 +132,6 @@ class GaitFeaturize:
 
         if isinstance(data, (type(None), type(np.NaN))):
             return "ERROR: Empty Filepath"
-
-        error_msg_list = []
         try:
             if isinstance(data, str):
                 with open(data) as f:
@@ -157,20 +155,22 @@ class GaitFeaturize:
         # exceptions during data reading
         except (AttributeError, TypeError, FileNotFoundError,
                 MemoryError, KeyError) as err:
-            error_msg_list.append("ERROR: %s" % type(err).__name__)
+            return "ERROR: %s" % type(err).__name__
         else:
             # check if empty
             if data.empty:
                 return "ERROR: Filepath has Empty Dataframe"
             elif not (set(data.columns) >= set(["x", "y", "z", "timestamp"])):
                 return "ERROR: [timestamp, x, y, z] in columns is required"
-            elif not ((data["timestamp"].iloc[-1] <= self.time_offset[1])
-                      & (data["timestamp"].iloc[0] >= self.time_offset[0])):
-                return "ERROR: Exceed Time Offset"
             else:
-                return self._format_time_series_data(data)
+                data = self.format_time_series_data(data)
+            if ((data["td"].iloc[-1] > self.time_offset[1])
+                    & (data["td"].iloc[0] <= self.time_offset[0])):
+                return "ERROR: Exceeded Time Offset"
+            else:
+                return data
 
-    def _format_time_series_data(self, data):
+    def format_time_series_data(self, data):
         """
         Utility function to format time series
 
@@ -191,17 +191,13 @@ class GaitFeaturize:
         """
         data = data.dropna(subset=["x", "y", "z"])
         data["AA"] = np.sqrt(data["x"]**2 + data["y"]**2 + data["z"]**2)
-        date_series = pd.to_datetime(data["timestamp"], unit="s")
-        data["td"] = (date_series - date_series.iloc[0])\
-            .apply(lambda x: x.total_seconds())
-        # create time index timestamp
-        data["timestamp"] = data["td"]
+        data["td"] = data["timestamp"] - data["timestamp"].iloc[0]
+        data["timestamp"] = pd.to_datetime(data["td"], unit="s")
         data = data.set_index("timestamp")
-        data.index = pd.to_datetime(data.index, unit="s")
+        # sort index
+        data = data.sort_index()
         # remove data duplicates
         data = data[~data.index.duplicated(keep='first')]
-        # sort all indexes
-        data = data.sort_index()
         return data[["td", "x", "y", "z", "AA"]]
 
     def _calculate_freeze_index(self, accel_series, sample_rate):
