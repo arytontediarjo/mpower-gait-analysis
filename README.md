@@ -1,4 +1,4 @@
-# MPower Gait Analysis Project (Sage Bionetworks Internal Use)
+# MPower Gait Analysis using PDKit and Rotation Time
 
 This project is a part of Sage Bionetworks mHeatlh Tools, authored by Aryton Tediarjo (mHealth Analytics Co-op) and Larsson Omberg (VP of Systems Biology). This repo will cover steps from data querying processes, data featurization, analysis and classification of Treatment (Multiple Sclerosis and Parkinsons) of Control groups using their gait features. 
 
